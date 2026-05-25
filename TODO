@@ -1,0 +1,15 @@
+#c3dhandler update for unlabeled Trajectories
+#Virtual/measured information exported from qtm and handled?
+#Is there such a thing as residuals for 3d marker positions? If so update marker data.
+#Need consistency between container class data shapes and h5 data shapes.
+#Forceplate location and position is written directly from the c3dfiles. If a custom moving fp is needed, raw h5 must be modified.
+#Added extra fields to the fp group
+    Unit force
+    unit moment
+    unit position
+    calibration matrix
+    origin(same as position but for static forceplates?)
+
+#what happens when I import h5, resolve it to internal structure, then I edit some stuff and I want to save it again? This should be handled
+#Forceplate class should support moving forceplates. Means the force plate corners and positions should be a timeseries
+#What is meant by forceplate residual positions?

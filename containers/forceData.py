@@ -14,7 +14,7 @@ class ForceData:
     sampling_rate: float = None
     
     def __post_init__(self):
-        self.transpose_data()
+        # self.transpose_data()
         self.clean_nan()
 
     def get_force_magnitude(self) -> np.ndarray:
@@ -67,15 +67,15 @@ class ForceData:
 
     @property
     def Fx(self) -> np.ndarray:
-        return self.force[:, 0]
+        return self.force[0, :]
     
     @property
     def Fy(self) -> np.ndarray:
-        return self.force[:, 1]
+        return self.force[1, :]
     
     @property
     def Fz(self) -> np.ndarray:
-        return self.force[:, 2]
+        return self.force[2, :]
         
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
