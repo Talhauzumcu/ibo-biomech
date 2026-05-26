@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -10,7 +11,8 @@ class MarkerData:
     y: np.ndarray = field(default_factory=lambda: np.zeros(1))
     z: np.ndarray = field(default_factory=lambda: np.zeros(1))
     sampling_rate: float = None
-    
+    virtual: int = 0 #Whether the marker is virtual or measured.
+
     def get_trajectory(self) -> np.ndarray:
         """Returns marker trajectory as (n_samples, 3) array."""
         return np.column_stack([self.x, self.y, self.z])
@@ -63,3 +65,44 @@ class MarkerData:
         plt.title(f'Marker: {self.name}')
         plt.legend(['X', 'Y', 'Z'])
         plt.show()
+
+    def __add__(self, other: MarkerData) -> MarkerData:
+        """Add two MarkerData instances together (e.g. for averaging)."""
+        if self.x.shape != other.x.shape:
+            raise ValueError("Cannot add MarkerData with different shapes.")
+        
+        name = f"{self.name}_plus_{other.name}"
+        return MarkerData(
+            name=name,
+            x=self.x + other.x,
+            y=self.y + other.y,
+            z=self.z + other.z,
+            sampling_rate=self.sampling_rate,
+            virtual = 1
+        )
+    
+    def __truediv__(self, other: MarkerData | float | int) -> MarkerData:
+        """Divide MarkerData by another MarkerData or a scalar."""
+        if isinstance(other, MarkerData):
+            if self.x.shape != other.x.shape:
+                raise ValueError("Cannot divide MarkerData with different shapes.")
+            return MarkerData(
+                name=f"{self.name}_div_{other.name}",
+                x=self.x / other.x,
+                y=self.y / other.y,
+                z=self.z / other.z,
+                sampling_rate=self.sampling_rate,
+                virtual=1
+            )
+        elif isinstance(other, (float, int)):
+            if other == 0:
+                raise ZeroDivisionError("Cannot divide MarkerData by zero.")
+            return MarkerData(
+                name=f"{self.name}_div_{other}",
+                x=self.x / other,
+                y=self.y / other,
+                z=self.z / other,
+                sampling_rate=self.sampling_rate,
+                virtual=1
+            )
+        return NotImplemented

@@ -11,3 +11,4 @@ h5h = H5Handler('test_output.h5')
 trial_data = h5h.load_data()
 
 # %%
+trial_data.add_marker()
