@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 class MarkerData:
     """Data class for 3D marker trajectories."""
     name: str
-    x: np.ndarray
-    y: np.ndarray
-    z: np.ndarray
+    x: np.ndarray = field(default_factory=lambda: np.zeros(1))
+    y: np.ndarray = field(default_factory=lambda: np.zeros(1))
+    z: np.ndarray = field(default_factory=lambda: np.zeros(1))
     sampling_rate: float = None
     
     def get_trajectory(self) -> np.ndarray:

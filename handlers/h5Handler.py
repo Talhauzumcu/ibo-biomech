@@ -27,7 +27,7 @@ class H5Handler:
         self.h5_path = h5_path
         self.trial_name = os.path.splitext(os.path.basename(h5_path))[0]
 
-    def load_trial_data(self) -> TrialData:
+    def load_data(self) -> TrialData:
         """Read the HDF5 file and return a fully populated TrialData object."""
         with h5py.File(self.h5_path, "r") as h5f:
             markers = self._load_markers(h5f)
@@ -262,10 +262,10 @@ class H5Handler:
             force  = plate["Force"][:]   # (n_samples, 3)
             moment = plate["Moment"][:]  # (n_samples, 3)
             cop    = plate["COP"][:]     # (n_samples, 3)
-            location = plate["location"][:]
-            position = plate["position"][:]
-            rotation = plate["rotation"][:]
-            offset = plate["offset"][:]
+            location = plate["Location"][:]
+            position = plate["Position"][:]
+            rotation = plate["Rotation"][:]
+            offset = plate["Offset"][:]
 
             sampling_rate = plate.attrs.get("SamplingFrequency")
             if sampling_rate is not None:

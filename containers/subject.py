@@ -16,7 +16,7 @@ class Subject:
     body_mass: float = None
     body_height: float = None
     age: int = None
-    trials = Dict[str, TrialData] = field(default_factory=dict)
+    trials: Dict[str, TrialData] = field(default_factory=dict)
     trials_loaded: bool = False
     
     def add_trial(self, trial_name: str, trial_data: TrialData) -> None:

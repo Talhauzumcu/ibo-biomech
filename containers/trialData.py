@@ -34,6 +34,10 @@ class TrialData:
         for force in self.forces.values():
             force.lowpass_filter(cutoff_force, order)
 
+    def add_marker(self, marker_data: MarkerData) -> None:
+        """Add a marker to the trial."""
+        self.markers[marker_data.name] = marker_data
+        
     def get_marker_names(self) -> List[str]:
         """Returns list of marker names."""
         return list(self.markers.keys())

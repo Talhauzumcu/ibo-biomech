@@ -6,14 +6,14 @@ from dataclasses import dataclass, field
 class ForceData:
     """Data class for force plate data."""
     name: str
-    force: np.ndarray  # (3, n_samples) - Fx, Fy, Fz
-    moment: np.ndarray  # (3, n_samples) - Mx, My, Mz
-    cop: np.ndarray  # (3, n_samples) - Center of Pressure x, y, z
-    location: np.ndarray # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
-    position: np.ndarray # (3, n_samples) - Position of force plate origin
-    rotation: np.ndarray # (3, 3, n_samples) - Rotation matrix of force plate orientation
-    offset: np.ndarray # ndarray(3,) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
-    coordinateSystem: int # is forceplate data saved in (1 = global, 0 = local) coordinates
+    force: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Fx, Fy, Fz
+    moment: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Mx, My, Mz
+    cop: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Center of Pressure x, y, z
+    location: np.ndarray = field(default_factory=lambda: np.zeros((3, 4, 1))) # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
+    position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate origin
+    rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation
+    offset: np.ndarray = field(default_factory=lambda: np.zeros(3)) # ndarray(3,) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
+    coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
     
@@ -29,7 +29,9 @@ class ForceData:
         self.force = np.nan_to_num(self.force)
         self.moment = np.nan_to_num(self.moment)
         self.cop = np.nan_to_num(self.cop)
-        self.Tz = np.nan_to_num(self.Tz)
+        self.location = np.nan_to_num(self.location)
+        self.position = np.nan_to_num(self.position)
+        self.rotation = np.nan_to_num(self.rotation)
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply low-pass Butterworth filter to force, moment, and cop data."""
@@ -37,19 +39,19 @@ class ForceData:
         if self.sampling_rate is None:
             raise ValueError("Sampling rate must be set to apply low-pass filter.")
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.force = filtfilt(b, a, self.force, axis=0)
-        self.moment = filtfilt(b, a, self.moment, axis=0)
-        self.cop = filtfilt(b, a, self.cop, axis=0)
-    
+        self.force = filtfilt(b, a, self.force, axis=1)
+        self.moment = filtfilt(b, a, self.moment, axis=1)
+        self.cop = filtfilt(b, a, self.cop, axis=1)
+
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply high-pass Butterworth filter to force, moment, and cop data."""
         from scipy.signal import butter, filtfilt
         if self.sampling_rate is None:
             raise ValueError("Sampling rate must be set to apply high-pass filter.")
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.force = filtfilt(b, a, self.force, axis=0)
-        self.moment = filtfilt(b, a, self.moment, axis=0)
-        self.cop = filtfilt(b, a, self.cop, axis=0)
+        self.force = filtfilt(b, a, self.force, axis=1)
+        self.moment = filtfilt(b, a, self.moment, axis=1)
+        self.cop = filtfilt(b, a, self.cop, axis=1)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
         """Set forces below threshold to zero."""
@@ -80,28 +82,28 @@ class ForceData:
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
         import matplotlib.pyplot as plt
-        time = np.arange(self.force.shape[0]) / self.sampling_rate if self.sampling_rate else np.arange(self.force.shape[0])
+        time = np.arange(self.force.shape[1]) / self.sampling_rate if self.sampling_rate else np.arange(self.force.shape[1])
         
         plt.figure(figsize=(12, 8))
         plt.subplot(3, 1, 1)
-        plt.plot(time, self.force)
+        plt.plot(time, self.force.T)
         plt.title(f'{self.name} - Force')
         plt.xlabel('Time (s)')
-        plt.ylabel('Force (N)')
+        plt.ylabel(f'Force {self.metadata.get("unit_force", "N")}')
         plt.legend(['Fx', 'Fy', 'Fz'])
         
         plt.subplot(3, 1, 2)
-        plt.plot(time, self.moment)
+        plt.plot(time, self.moment.T)
         plt.title(f'{self.name} - Moment')
         plt.xlabel('Time (s)')
-        plt.ylabel('Moment (Nm)')
+        plt.ylabel(f'Moment {self.metadata.get("unit_moment", "Nm")}')
         plt.legend(['Mx', 'My', 'Mz'])
         
         plt.subplot(3, 1, 3)
-        plt.plot(time, self.cop)
+        plt.plot(time, self.cop.T)
         plt.title(f'{self.name} - Center of Pressure')
         plt.xlabel('Time (s)')
-        plt.ylabel('COP (m)')
+        plt.ylabel(f'COP {self.metadata.get("unit_cop", "mm")}')
         plt.legend(['COPx', 'COPy', 'COPz'])
         
         plt.tight_layout()

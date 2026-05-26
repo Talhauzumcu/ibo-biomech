@@ -167,7 +167,6 @@ class C3DHandler:
                 force=plate['force'],
                 moment=plate['moment'],
                 cop=plate['center_of_pressure'],
-                Tz=plate['Tz'],
                 metadata=metadata,
                 sampling_rate=self.c3d_data['parameters']['ANALOG']['RATE']['value'][0]
             )
@@ -190,7 +189,7 @@ class C3DHandler:
             self.c3d_data['data']['points'] = np.concatenate((self.c3d_data['data']['points'], marker_frame), axis=1)
         else:
             print(f"Marker {marker.name} already exists in C3D data. Skipping addition to C3D structure.")
-            
+
     def write_c3d(self, output_filepath: str) -> None:
         #Check if all marker data exist in the c3d structure
         if self.c3d_data is None:
