@@ -1,8 +1,8 @@
 #c3dhandler update for unlabeled Trajectories
 #C3dhandler has a lot functions left over from old code that needs clean up
-#Virtual/measured information exported from qtm and handled?
+#Virtual/measured information exported from qtm and handled? how?
 #Is there such a thing as residuals for 3d marker positions? If so update marker data.
-#Forceplate location and position is written directly from the c3dfiles. If a custom moving fp is needed, raw h5 must be modified.
+#Forceplate location and position is written directly from the c3dfiles. If a custom moving fp is needed, data must be modified and resaved as h5.
 #Added extra fields to the fp group
     Unit force
     unit moment
@@ -10,7 +10,4 @@
     calibration matrix
     origin(same as position but for static forceplates?)
 
-#Forceplate class should support moving forceplates. Means the force plate corners and positions should be a timeseries
 #What is meant by forceplate residual positions?
-#_save_forces needs review
-#add crop function to all containers. 
