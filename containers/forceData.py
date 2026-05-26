@@ -9,24 +9,20 @@ class ForceData:
     force: np.ndarray  # (3, n_samples) - Fx, Fy, Fz
     moment: np.ndarray  # (3, n_samples) - Mx, My, Mz
     cop: np.ndarray  # (3, n_samples) - Center of Pressure x, y, z
-    Tz: np.ndarray  # (3, n_samples,) - Moment at center of pressure
+    location: np.ndarray # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
+    position: np.ndarray # (3, n_samples) - Position of force plate origin
+    rotation: np.ndarray # (3, 3, n_samples) - Rotation matrix of force plate orientation
+    offset: np.ndarray # ndarray(3,) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
+    coordinateSystem: int # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
     
     def __post_init__(self):
-        # self.transpose_data()
         self.clean_nan()
 
     def get_force_magnitude(self) -> np.ndarray:
         """Returns magnitude of force vector."""
         return np.sqrt(np.sum(self.force**2, axis=1))
-
-    def transpose_data(self) -> None:
-        """Transpose force, moment, and cop data to shape (n_samples, 3)."""
-        self.force = self.force.T
-        self.moment = self.moment.T
-        self.cop = self.cop.T
-        self.Tz = self.Tz.T
 
     def clean_nan(self) -> None:
         """Replace NaN values in force, moment, and cop with zeros."""
@@ -53,7 +49,6 @@ class ForceData:
         self.force[low_force_indices] = 0
         self.moment[low_force_indices] = 0
         self.cop[low_force_indices] = 0
-        self.Tz[low_force_indices] = 0
 
     def downsample(self, factor: int) -> None:
         """Downsample force, moment, cop, and Tz data using scipy's decimate."""
@@ -61,21 +56,17 @@ class ForceData:
         self.force = decimate(self.force, factor, axis=0, ftype='fir', zero_phase=True)
         self.moment = decimate(self.moment, factor, axis=0, ftype='fir', zero_phase=True)
         self.cop = decimate(self.cop, factor, axis=0, ftype='fir', zero_phase=True)
-        self.Tz = decimate(self.Tz, factor, axis=0, ftype='fir', zero_phase=True)
         if self.sampling_rate:
             self.sampling_rate /= factor
 
-    @property
-    def Fx(self) -> np.ndarray:
-        return self.force[0, :]
-    
-    @property
-    def Fy(self) -> np.ndarray:
-        return self.force[1, :]
-    
-    @property
-    def Fz(self) -> np.ndarray:
-        return self.force[2, :]
+    def crop(self, start_idx: int, end_idx: int) -> None:
+        """Crop force, moment, cop, and Tz data to specified index range."""
+        self.force = self.force[:, start_idx:end_idx]
+        self.moment = self.moment[:, start_idx:end_idx]
+        self.cop = self.cop[:, start_idx:end_idx]
+        self.location = self.location[:, :, start_idx:end_idx]
+        self.position = self.position[:, start_idx:end_idx]
+        self.rotation = self.rotation[:, :, start_idx:end_idx]
         
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
@@ -106,3 +97,51 @@ class ForceData:
         
         plt.tight_layout()
         plt.show()
+
+    @property
+    def Fx(self) -> np.ndarray:
+        return self.force[0, :]
+    
+    @property
+    def Fy(self) -> np.ndarray:
+        return self.force[1, :]
+    
+    @property
+    def Fz(self) -> np.ndarray:
+        return self.force[2, :]
+
+    @property
+    def cop_x(self) -> np.ndarray:
+        return self.cop[0, :]
+    
+    @property
+    def cop_y(self) -> np.ndarray:
+        return self.cop[1, :]
+
+    @property
+    def cop_z(self) -> np.ndarray:
+        return self.cop[2, :]
+    
+    @property
+    def Mx(self) -> np.ndarray:
+        return self.moment[0, :]
+    
+    @property
+    def My(self) -> np.ndarray:
+        return self.moment[1, :]
+    
+    @property
+    def Mz(self) -> np.ndarray:
+        return self.moment[2, :]
+    
+    @property
+    def x(self) -> np.ndarray:
+        return self.position[0, :]
+    
+    @property
+    def y(self) -> np.ndarray:
+        return self.position[1, :]
+    
+    @property
+    def z(self) -> np.ndarray:
+        return self.position[2, :]

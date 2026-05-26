@@ -15,6 +15,15 @@ class TrialData:
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
 
+    def crop(self, start_idx: int, end_idx: int) -> None:
+        """Crop all marker, analog, and force data to the specified index range."""
+        for marker in self.markers.values():
+            marker.crop(start_idx, end_idx)
+        for analog in self.analogs.values():
+            analog.crop(start_idx, end_idx)
+        for force in self.forces.values():
+            force.crop(start_idx, end_idx)
+            
     def get_marker_names(self) -> List[str]:
         """Returns list of marker names."""
         return list(self.markers.keys())

@@ -45,7 +45,7 @@ class H5Handler:
         """Save a (processed) TrialData back to the lab HDF5 format.
 
         The original file is used as a template: all groups and attributes are
-        copied verbatim, then the datasets that TrialData owns (trajectories,
+        copied, then the datasets that TrialData owns (trajectories,
         analog, force plates) are overwritten with current values.  Groups that
         TrialData has no knowledge of (RigidBodies, Events, CustomFields, …)
         are preserved untouched.
@@ -56,8 +56,7 @@ class H5Handler:
                       as self.h5_path to overwrite in-place (the copy is done
                       before any writes, so the original is safe).
         """
-        # Work from a full copy of the source so every attribute / group we
-        # don't touch is automatically preserved.
+
         shutil.copy2(self.h5_path, out_path)
 
         with h5py.File(out_path, "r+") as h5f:
@@ -142,11 +141,11 @@ class H5Handler:
 
         for fp_name, fp_data in trial.forces.items():
             if fp_name not in existing_by_name:
-                # New plate added in memory — append at the next integer index
+                # New plate added in memory, append at the next integer index
                 next_key = str(len(fp_group))
                 plate = fp_group.create_group(next_key)
                 plate.attrs["Name"] = fp_name
-                plate.attrs["CoordinateSystem"] = 1
+                plate.attrs["CoordinateSystem"] = 0
                 plate.attrs["Filter"] = "none"
                 meta = fp_data.metadata or {}
                 plate.attrs["unit_force"]    = meta.get("unit_force", "")
@@ -162,7 +161,12 @@ class H5Handler:
 
             for ds_name, arr in [("Force", fp_data.force),
                                   ("Moment", fp_data.moment),
-                                  ("COP", fp_data.cop)]:
+                                  ("COP", fp_data.cop),
+                                  ("Location", fp_data.location),
+                                  ("Position", fp_data.position),
+                                  ("Rotation", fp_data.rotation),
+                                  ("Offset", fp_data.offset)
+                                  ]:
                 if ds_name in plate:
                     del plate[ds_name]
                 plate.create_dataset(ds_name, data=arr, compression="gzip")
@@ -243,12 +247,10 @@ class H5Handler:
             force  = plate["Force"][:]   # (n_samples, 3)
             moment = plate["Moment"][:]  # (n_samples, 3)
             cop    = plate["COP"][:]     # (n_samples, 3)
-
-            # Tz may not exist in every file; fall back to zeros
-            if "Tz" in plate:
-                Tz = plate["Tz"][:]
-            else:
-                Tz = np.zeros_like(cop)
+            location = plate["location"][:]
+            position = plate["position"][:]
+            rotation = plate["rotation"][:]
+            offset = plate["offset"][:]
 
             sampling_rate = plate.attrs.get("SamplingFrequency")
             if sampling_rate is not None:
@@ -261,18 +263,15 @@ class H5Handler:
                 "origin":        plate.attrs.get("origin", None),
             }
 
-            # Recover corners from the Location dataset if present
-            if "Location" in plate:
-                loc = plate["Location"][:]   # (4, 3, n_frames) or (3, 4, n_frames)
-                # Store only the first frame's corner snapshot
-                metadata["corners"] = loc[:, :, 0] if loc.ndim == 3 else loc
-
             forces[name] = ForceData(
                 name=name,
                 force=force,
                 moment=moment,
                 cop=cop,
-                Tz=Tz,
+                location=location,
+                position=position,
+                rotation=rotation,
+                offset=offset,
                 metadata=metadata,
                 sampling_rate=sampling_rate,
             )

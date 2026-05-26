@@ -15,6 +15,10 @@ class AnalogData:
         """Returns the analog signal data."""
         return self.data
 
+    def crop(self, start_idx: int, end_idx: int) -> None:
+        """Crop the analog data to the specified index range."""
+        self.data = self.data[start_idx:end_idx]
+        
     def plot(self) -> None:
         """Plot the analog signal."""
         import matplotlib.pyplot as plt

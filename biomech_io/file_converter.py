@@ -103,6 +103,7 @@ class FileConverter:
             fp_group = h5f.create_group("ForcePlates")
             for i, (name, fp_data) in enumerate(handler.forces.items()):
                 plate_group = fp_group.create_group(str(i))
+                
                 plate_group.attrs['unit_force'] = fp_data.metadata.get("unit_force") if fp_data.metadata else "Unknown"
                 plate_group.attrs['unit_moment'] = fp_data.metadata.get("unit_moment") if fp_data.metadata else "Unknown"
                 plate_group.attrs['unit_position'] = fp_data.metadata.get("unit_position") if fp_data.metadata else "Unknown"
@@ -111,6 +112,7 @@ class FileConverter:
                 numSamples = fp_data.force.shape[0]
                 plate_group.attrs['NumSamples'] = num_samples
                 plate_group.attrs['SamplingFrequency'] = fp_data.sampling_rate
+
                 fp_sampling_factor = None
                 if fp_data.sampling_rate is not None and marker_rate is not None:
                     fp_sampling_factor = fp_data.sampling_rate / marker_rate
@@ -133,10 +135,13 @@ class FileConverter:
                     position[0:3, :] = np.asarray(origin, dtype=np.float64).reshape(3, 1)
                 else:
                     position = None
+                
+                #Since c3d files don't hold these information, initial fileconversion uses static values. 
+                #These can be updated directly from the h5 file and resaved.
                 plate_group.create_dataset("Position", data=position, compression="gzip")
                 plate_group.create_dataset("Rotation", data=np.zeros((3,3, numSamples)), compression="gzip")
                 plate_group.create_dataset("Offset", data=np.zeros((3,)), compression="gzip")
-                plate_group.attrs["CoordinateSystem"] = 1
+                plate_group.attrs["CoordinateSystem"] = 0 # Is this information available in c3d files? If not where to get it? or what is default?
 
             h5f.create_group("RigidBodies")
             h5f.create_group("Events")

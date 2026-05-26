@@ -68,6 +68,8 @@ class C3DHandler:
         Raises:
             FileNotFoundError: If the file doesn't exist
             Exception: If there's an error reading the C3D file
+        Returns:
+            None
         """
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"C3D file not found: {self.filepath}")
@@ -85,23 +87,15 @@ class C3DHandler:
     def _parse_markers(self) -> None:
         """Parse marker data from C3D file into MarkerData containers."""
         try:
-            # Get point data (markers)
             points = self.c3d_data['data']['points']
-            
-            # Get marker labels
             marker_labels = self.c3d_data['parameters']['POINT']['LABELS']['value']
-            
-            # Get sampling rate
             point_rate = self.c3d_data['parameters']['POINT']['RATE']['value'][0]
             
-            # Parse each marker
             for i, label in enumerate(marker_labels):
-                # Extract x, y, z coordinates (first 3 rows for each marker)
                 x = points[0, i, :]
                 y = points[1, i, :]
                 z = points[2, i, :]
                 
-                # Create MarkerData container
                 marker = MarkerData(
                     name=label.strip(),
                     x=x,
@@ -118,22 +112,15 @@ class C3DHandler:
     def _parse_analogs(self) -> None:
         """Parse analog data from C3D file into AnalogData containers."""
         try:
-            # Get analog data
             analogs = self.c3d_data['data']['analogs']
-            
-            # Get analog labels
             analog_labels = self.c3d_data['parameters']['ANALOG']['LABELS']['value']
-            
-            # Get analog sampling rate
             analog_rate = self.c3d_data['parameters']['ANALOG']['RATE']['value'][0]
-            
-            # Get units if available
+
             try:
                 units = self.c3d_data['parameters']['ANALOG']['UNITS']['value']
             except KeyError:
                 units = [""] * len(analog_labels)
             
-            # Parse each analog channel
             for i, label in enumerate(analog_labels):
                 analog_signal = analogs[0, i, :]
 
@@ -147,7 +134,6 @@ class C3DHandler:
                     else:   
                         break
                 
-                # Create AnalogData container
                 analog = AnalogData(
                     name=label.strip(),
                     data=analog_signal,
@@ -155,7 +141,6 @@ class C3DHandler:
                     unit=units[i].strip() if i < len(units) else "",
                     channel=i
                 )
-                
                 
                 self.analogs[label.strip()] = analog
                 
@@ -203,7 +188,9 @@ class C3DHandler:
             self.c3d_data['parameters']['POINT']['LABELS']['value'].append(marker.name)
             marker_frame = marker.get_frame_trajectory().reshape(4,1,marker.x.shape[0])
             self.c3d_data['data']['points'] = np.concatenate((self.c3d_data['data']['points'], marker_frame), axis=1)
-    
+        else:
+            print(f"Marker {marker.name} already exists in C3D data. Skipping addition to C3D structure.")
+            
     def write_c3d(self, output_filepath: str) -> None:
         #Check if all marker data exist in the c3d structure
         if self.c3d_data is None:

@@ -35,7 +35,7 @@ class MarkerData:
         self.y = filtfilt(b, a, self.y)
         self.z = filtfilt(b, a, self.z)
 
-    def slice_data(self, start_idx: int, end_idx: int) -> None:
+    def crop(self, start_idx: int, end_idx: int) -> None:
         """Returns a new MarkerData instance with data sliced between start_idx and end_idx."""
         self.x=self.x[start_idx:end_idx]
         self.y=self.y[start_idx:end_idx]
