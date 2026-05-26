@@ -23,7 +23,17 @@ class TrialData:
             analog.crop(start_idx, end_idx)
         for force in self.forces.values():
             force.crop(start_idx, end_idx)
-            
+    
+    def lowpass_filter(self, cutoff_marker: float, cutoff_analog: float, cutoff_force: float, order: int = 4) -> None:
+        """Apply low-pass Butterworth filter to all marker, analog and force data. 
+        Cutoff frequencies can be specified separately for markers, analogs, and forces."""
+        for marker in self.markers.values():
+            marker.lowpass_filter(cutoff_marker, order)
+        for analog in self.analogs.values():
+            analog.lowpass_filter(cutoff_analog, order)
+        for force in self.forces.values():
+            force.lowpass_filter(cutoff_force, order)
+
     def get_marker_names(self) -> List[str]:
         """Returns list of marker names."""
         return list(self.markers.keys())

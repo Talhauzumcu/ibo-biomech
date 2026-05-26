@@ -40,7 +40,16 @@ class ForceData:
         self.force = filtfilt(b, a, self.force, axis=0)
         self.moment = filtfilt(b, a, self.moment, axis=0)
         self.cop = filtfilt(b, a, self.cop, axis=0)
-        self.Tz = filtfilt(b, a, self.Tz, axis=0)
+    
+    def highpass_filter(self, cutoff: float, order: int = 4) -> None:
+        """Apply high-pass Butterworth filter to force, moment, and cop data."""
+        from scipy.signal import butter, filtfilt
+        if self.sampling_rate is None:
+            raise ValueError("Sampling rate must be set to apply high-pass filter.")
+        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
+        self.force = filtfilt(b, a, self.force, axis=0)
+        self.moment = filtfilt(b, a, self.moment, axis=0)
+        self.cop = filtfilt(b, a, self.cop, axis=0)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
         """Set forces below threshold to zero."""
@@ -67,7 +76,7 @@ class ForceData:
         self.location = self.location[:, :, start_idx:end_idx]
         self.position = self.position[:, start_idx:end_idx]
         self.rotation = self.rotation[:, :, start_idx:end_idx]
-        
+
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
         import matplotlib.pyplot as plt

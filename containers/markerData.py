@@ -34,6 +34,16 @@ class MarkerData:
         self.x = filtfilt(b, a, self.x)
         self.y = filtfilt(b, a, self.y)
         self.z = filtfilt(b, a, self.z)
+    
+    def highpass_filter(self, cutoff: float, order: int = 4) -> None:
+        """Apply high-pass Butterworth filter to marker trajectories."""
+        from scipy.signal import butter, filtfilt
+        if self.sampling_rate is None:
+            raise ValueError("Sampling rate must be set to apply high-pass filter.")
+        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
+        self.x = filtfilt(b, a, self.x)
+        self.y = filtfilt(b, a, self.y)
+        self.z = filtfilt(b, a, self.z)
 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Returns a new MarkerData instance with data sliced between start_idx and end_idx."""
