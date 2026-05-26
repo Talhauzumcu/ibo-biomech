@@ -14,6 +14,7 @@ class Subject:
     id: str = ""
     condition: str = ""
     body_mass: float = None
+    body_height: float = None
     age: int = None
     trials = Dict[str, TrialData] = field(default_factory=dict)
     trials_loaded: bool = False

@@ -6,7 +6,7 @@ from typing import Dict, Optional, Any, List
 import h5py
 import numpy as np
 
-from containers import AnalogData, ForceData, MarkerData, TrialData
+from containers import AnalogData, ForceData, MarkerData, TrialData, Subject
 
 
 class H5Handler:
@@ -27,7 +27,7 @@ class H5Handler:
         self.h5_path = h5_path
         self.trial_name = os.path.splitext(os.path.basename(h5_path))[0]
 
-    def load_data(self) -> TrialData:
+    def load_trial_data(self) -> TrialData:
         """Read the HDF5 file and return a fully populated TrialData object."""
         with h5py.File(self.h5_path, "r") as h5f:
             markers = self._load_markers(h5f)
@@ -40,6 +40,21 @@ class H5Handler:
             analogs=analogs,
             forces=forces,
         )
+
+    def load_subject_data(self) -> Subject:
+        """Loads trial data and creates a subject instance with the metadata. Created subject instance has the trialdata added."""
+        trial_data = self.load_trial_data()
+        with h5py.File(self.h5_path, "r") as h5f:
+            meta = h5f["MetaData"].attrs
+            subject_id = meta.get("SubjectID", "")
+            condition = meta.get("Condition", "")
+            body_mass = meta.get("BodyMass", None)
+            body_height = meta.get("BodyHeight", None)
+            age = meta.get("Age", None)
+
+        subject = Subject(id=subject_id, condition=condition, body_mass=body_mass, body_height=body_height, age=age)
+        subject.add_trial(trial_name=trial_data.trial_name, trial_data=trial_data)
+        return subject
 
     def save_data(self, trial: TrialData, out_path: str) -> None:
         """Save a (processed) TrialData back to the lab HDF5 format.
