@@ -51,12 +51,16 @@ converter.c3d_to_h5("input_file.c3d", "output_file.h5")
 from handlers.h5Handler import H5Handler
 from containers.subject import Subject
 
-# Load trial from an H5 file directly as a structured Subject
 handler = H5Handler("subject_trial.h5")
+
+# Option A: Load just the TrialData directly
+trial = handler.load_data()
+
+# Option B: Load it as a structured Subject
 subject = handler.load_subject_data()
+trial = subject.get_trial_by_idx(0)
 
 # Process data inside the convenient TrialData container
-trial = subject.get_trial_by_idx(0)
 trial.crop(start_idx=100, end_idx=500)
 
 # Filter nested analogs, markers, and forces with distinct cutoffs
