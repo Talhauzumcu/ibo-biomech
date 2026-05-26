@@ -5,9 +5,6 @@ from containers import AnalogData, ForceData, MarkerData
 import numpy as np
 from copy import deepcopy
 
-""" This class imports the c3d data from the ezc3d library and parses it into container objects defined in containers.py 
-It is also used as a trial factory to load c3d files directly into TrialData objects without keeping the handler instance in memory."""
-
 class C3DHandler:
     """Handler class for loading and parsing C3D files using ezc3d library."""
     
