@@ -14,6 +14,12 @@ class TrialData:
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
+    metadata: Dict = field(default_factory=dict)
+    
+    def __post_init__(self):
+        """Calculates some easy access attributes after initialization."""
+        self.marker_labels = list(self.markers.keys())
+        self.analog_labels = list(self.analogs.keys())
 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop all marker, analog, and force data to the specified index range."""

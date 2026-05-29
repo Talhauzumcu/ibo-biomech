@@ -33,12 +33,14 @@ class H5Handler:
             markers = self._load_markers(h5f)
             analogs = self._load_analogs(h5f)
             forces = self._load_forces(h5f)
+            metadata = dict(h5f["MetaData"].attrs)
 
         return TrialData(
             trial_name=self.trial_name,
             markers=markers,
             analogs=analogs,
             forces=forces,
+            metadata=metadata,
         )
 
     def load_subject_data(self) -> Subject:
