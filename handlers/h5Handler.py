@@ -180,7 +180,8 @@ class H5Handler:
                                   ("Location", fp_data.location),
                                   ("Position", fp_data.position),
                                   ("Rotation", fp_data.rotation),
-                                  ("Offset", fp_data.offset)
+                                  ("Offset", fp_data.offset),
+                                  ("Tz", fp_data.Tz)
                                   ]:
                 if ds_name in plate:
                     del plate[ds_name]
@@ -266,6 +267,7 @@ class H5Handler:
             position = plate["Position"][:]
             rotation = plate["Rotation"][:]
             offset = plate["Offset"][:]
+            Tz = plate["Tz"][:]
 
             sampling_rate = plate.attrs.get("SamplingFrequency")
             if sampling_rate is not None:
@@ -288,6 +290,7 @@ class H5Handler:
                 rotation=rotation,
                 offset=offset,
                 metadata=metadata,
+                Tz = Tz,
                 sampling_rate=sampling_rate,
             )
 

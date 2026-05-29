@@ -164,6 +164,7 @@ class C3DHandler:
                 force=plate['force'],
                 moment=plate['moment'],
                 cop=plate['center_of_pressure'],
+                Tz = plate['Tz'][2,:],
                 metadata=metadata,
                 sampling_rate=self.c3d_data['parameters']['ANALOG']['RATE']['value'][0]
             )

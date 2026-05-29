@@ -6,22 +6,18 @@ from datetime import datetime, timezone
 class FileConverter:
     """Stateless utility class to convert between biomechanical file formats."""
     
-    def c3d_to_h5(self, c3d_path: str, h5_path: str) -> None:
+    @staticmethod
+    def c3d_to_h5(c3d_path: str, h5_path: str) -> None:
         """Converts a C3D file directly to the lab's HDF5 architecture."""
 
         handler = C3DHandler(c3d_path)
         handler.load_data()
         labels = list(handler.markers.keys())
         num_labeled = len(labels)
-        marker_rate = None
-        num_frames = 0
-        if num_labeled > 0:
-            first_marker = handler.markers[labels[0]]
-            marker_rate = first_marker.sampling_rate
-            num_frames = len(first_marker.x)
-
-        start_frame = handler.c3d_data['parameters']['POINT']['DATA_START']['value'][0]
-        end_frame = start_frame + num_frames - 1 if num_frames > 0 else None
+        marker_rate = handler.c3d_data['header']['points']['frame_rate']
+        start_frame = handler.c3d_data['header']['points']['first_frame']
+        end_frame = handler.c3d_data['header']['points']['last_frame']
+        num_frames = end_frame - start_frame + 1 
 
         if num_labeled > 0:
             labeled_data = np.zeros((num_labeled, 4, num_frames), dtype=np.float64)
@@ -35,17 +31,17 @@ class FileConverter:
             labeled_data = np.empty((0, 4, num_frames), dtype=np.float64)
             labeled_type = np.empty((0, num_frames), dtype=np.int8)
 
+        labeled_residuals = handler.c3d_data['data']['meta_points']['residuals'].reshape(35,1,141)
         # C3DHandler currently does not handle unlabeled trajectories.
         unlabeled_data = np.empty((0, 4, num_frames), dtype=np.float64)
         unlabeled_type = np.empty((0, num_frames), dtype=np.int8)
 
         analog_labels = list(handler.analogs.keys())
         num_channels = len(analog_labels)
-        analog_rate = None
+        analog_rate = handler.c3d_data['header']['analogs']['frame_rate'] if num_channels > 0 else None
         num_samples = 0
         if num_channels > 0:
             first_analog = handler.analogs[analog_labels[0]]
-            analog_rate = first_analog.sampling_rate
             num_samples = len(first_analog.data)
             analog_data = np.zeros((num_channels, num_samples), dtype=np.float64)
             for i, label in enumerate(analog_labels):
@@ -81,8 +77,10 @@ class FileConverter:
 
             labeled_group = traj_group.create_group("Labeled")
             labeled_group.attrs["Labels"] = labels
+            labeled_group.attrs["NumLabeled"] = len(labels)
             labeled_group.create_dataset("Data", data=labeled_data, compression="gzip")
             labeled_group.create_dataset("Type", data=labeled_type, compression="gzip")
+            labeled_group.create_dataset("Residuals", data=labeled_residuals, compression="gzip")
 
             unlabeled_group = traj_group.create_group("Unlabeled")
             unlabeled_group.attrs["NumUnlabeled"] = 0
@@ -121,7 +119,7 @@ class FileConverter:
                 plate_group.create_dataset("COP", data=fp_data.cop, compression="gzip")
                 plate_group.create_dataset("Force", data=fp_data.force, compression="gzip")
                 plate_group.create_dataset("Moment", data=fp_data.moment, compression="gzip")
-
+                plate_group.create_dataset('Tz', data=fp_data.Tz, compression="gzip")
                 corners = fp_data.metadata.get("corners") if fp_data.metadata else None
                 if corners is not None and num_frames > 0:
                     location = np.repeat(corners[:, :, np.newaxis], num_frames, axis=2)
@@ -142,9 +140,9 @@ class FileConverter:
                 plate_group.create_dataset("Rotation", data=np.zeros((3,3, numSamples)), compression="gzip")
                 plate_group.create_dataset("Offset", data=np.zeros((3,)), compression="gzip")
                 plate_group.attrs["CoordinateSystem"] = 0 # Is this information available in c3d files? If not where to get it? or what is default?
-
-            h5f.create_group("RigidBodies")
-            h5f.create_group("Events")
+            
+            h5f.create_group("RigidBodies") #C3d doesn't hold these? have to be custom created
+            events_group = h5f.create_group("Events")
             h5f.create_group("CustomFields")
 
         print(f"Successfully converted {c3d_path} to {h5_path}")
