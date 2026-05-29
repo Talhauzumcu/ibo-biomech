@@ -1,2 +1,3 @@
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #Add a h5 to trc (DONE) and c3d to trc converter to the file converter.
+#Add a h5 to mot and c3d to mot converter (GRFs)
