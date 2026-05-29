@@ -1,6 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from typing import Dict, List, Optional, Any
+from utils.utils import *
 from dataclasses import dataclass, field
 
 @dataclass
@@ -14,8 +15,8 @@ class MarkerData:
     virtual: int = 0 #Whether the marker is virtual or measured.
 
     def get_trajectory(self) -> np.ndarray:
-        """Returns marker trajectory as (n_samples, 3) array."""
-        return np.column_stack([self.x, self.y, self.z])
+        """Returns marker trajectory as (3, n_samples) array."""
+        return np.column_stack([self.x, self.y, self.z]).T
     
     def get_magnitude(self) -> np.ndarray:
         """Returns magnitude of 3D position."""
@@ -52,6 +53,15 @@ class MarkerData:
         self.x=self.x[start_idx:end_idx]
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
+
+    def rotate(self, axis, angle_deg) -> None:
+        """Rotate marker trajectory around specified axis by given angle in degrees."""
+        rotation_matrix = get_rotation_matrix(axis, angle_deg)
+        trajectory = self.get_trajectory()  # (3, n_samples)
+        rotated_traj = rotation_matrix @ trajectory  # (3, n_samples)
+        self.x = rotated_traj[0, :]
+        self.y = rotated_traj[1, :]
+        self.z = rotated_traj[2, :]
 
     def plot(self) -> None:
         """Plot marker trajectory in 3D space."""

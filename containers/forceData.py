@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from utils.utils import * 
 
 @dataclass
 class ForceData:
@@ -12,7 +13,7 @@ class ForceData:
     location: np.ndarray = field(default_factory=lambda: np.zeros((3, 4, 1))) # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
     position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate origin
     rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation
-    offset: np.ndarray = field(default_factory=lambda: np.zeros(3)) # ndarray(3,) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
+    offset: np.ndarray = field(default_factory=lambda: np.zeros(3,1)) # ndarray(3,) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
     Tz: np.ndarray = field(default_factory=lambda: np.zeros((1, 1))) # (1, n_samples) - Vertical force component used for gait event detection
     coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
@@ -80,6 +81,14 @@ class ForceData:
         self.position = self.position[:, start_idx:end_idx]
         self.rotation = self.rotation[:, :, start_idx:end_idx]
 
+    def rotate(self, axis, angle_deg) -> None:
+        rotation_matrix = get_rotation_matrix(axis, angle_deg)
+        self.force = rotation_matrix @ self.force
+        self.moment = rotation_matrix @ self.moment
+        self.cop = rotation_matrix @ self.cop
+        self.position = rotation_matrix @ self.position
+        self.rotation = rotation_matrix @ self.rotation
+        
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
         import matplotlib.pyplot as plt

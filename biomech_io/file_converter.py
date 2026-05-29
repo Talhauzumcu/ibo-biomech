@@ -146,3 +146,11 @@ class FileConverter:
             h5f.create_group("CustomFields")
 
         print(f"Successfully converted {c3d_path} to {h5_path}")
+
+
+    def h5_to_trc(h5_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Converts and h5 file to TRC format. Default values are set to convert from lab's h5 architecture to OpenSim TRC format."""
+        
+
+
+

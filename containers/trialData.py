@@ -15,11 +15,21 @@ class TrialData:
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
-    
+
     def __post_init__(self):
         """Calculates some easy access attributes after initialization."""
         self.marker_labels = list(self.markers.keys())
         self.analog_labels = list(self.analogs.keys())
+
+    def rotate_markers(self, axis, angle_deg) -> None:
+        """Rotate all marker trajectories around specified axis by given angle in degrees."""
+        for marker in self.markers.values():
+            marker.rotate(axis, angle_deg)
+            
+    def rotate_forces(self, axis, angle_deg) -> None:
+        """Rotate all force plate data around specified axis by given angle in degrees."""
+        for force in self.forces.values():
+            force.rotate(axis, angle_deg)
 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop all marker, analog, and force data to the specified index range."""
