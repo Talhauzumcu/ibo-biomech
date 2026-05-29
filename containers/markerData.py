@@ -11,6 +11,7 @@ class MarkerData:
     x: np.ndarray = field(default_factory=lambda: np.zeros(1))
     y: np.ndarray = field(default_factory=lambda: np.zeros(1))
     z: np.ndarray = field(default_factory=lambda: np.zeros(1))
+    unit: str = 'mm'
     sampling_rate: float = None
     virtual: int = 0 #Whether the marker is virtual or measured.
 
@@ -62,6 +63,23 @@ class MarkerData:
         self.x = rotated_traj[0, :]
         self.y = rotated_traj[1, :]
         self.z = rotated_traj[2, :]
+
+    def convert_units(self, target_unit: str) -> None:
+        """Convert marker trajectory units to target_unit (e.g. 'mm' to 'm')."""
+        conversion_factors = {
+            ('mm', 'm'): 0.001,
+            ('m', 'mm'): 1000,
+        }
+        if self.unit == target_unit:
+            return  # No conversion needed
+        key = (self.unit, target_unit)
+        if key not in conversion_factors:
+            raise ValueError(f"Unsupported unit conversion: {self.unit} to {target_unit}")
+        factor = conversion_factors[key]
+        self.x *= factor
+        self.y *= factor
+        self.z *= factor
+        self.unit = target_unit
 
     def plot(self) -> None:
         """Plot marker trajectory in 3D space."""

@@ -20,12 +20,20 @@ class TrialData:
         """Calculates some easy access attributes after initialization."""
         self.marker_labels = list(self.markers.keys())
         self.analog_labels = list(self.analogs.keys())
-
+        self.marker_rate = next(iter(self.markers.values())).sampling_rate if self.markers else None
+        self.analog_rate = next(iter(self.analogs.values())).sampling_rate if self.analogs else None
+    
     def rotate_markers(self, axis, angle_deg) -> None:
         """Rotate all marker trajectories around specified axis by given angle in degrees."""
         for marker in self.markers.values():
             marker.rotate(axis, angle_deg)
-            
+    
+    def convert_units(self, target_unit: str) -> None:
+        """Convert all marker trajectories to the specified unit.
+            Only converts markers"""
+        for marker in self.markers.values():
+            marker.convert_units(target_unit)
+    
     def rotate_forces(self, axis, angle_deg) -> None:
         """Rotate all force plate data around specified axis by given angle in degrees."""
         for force in self.forces.values():

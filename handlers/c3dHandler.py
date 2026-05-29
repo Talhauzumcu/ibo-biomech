@@ -87,7 +87,7 @@ class C3DHandler:
             points = self.c3d_data['data']['points']
             marker_labels = self.c3d_data['parameters']['POINT']['LABELS']['value']
             point_rate = self.c3d_data['parameters']['POINT']['RATE']['value'][0]
-            
+            unit = self.c3d_data['parameters']['POINT']['UNITS']['value'][0]
             for i, label in enumerate(marker_labels):
                 x = points[0, i, :]
                 y = points[1, i, :]
@@ -98,6 +98,7 @@ class C3DHandler:
                     x=x,
                     y=y,
                     z=z,
+                    unit=unit.strip(),
                     sampling_rate=point_rate
                 )
                 

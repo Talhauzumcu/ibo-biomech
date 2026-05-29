@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
-from handlers.c3dHandler import C3DHandler
+from utils.utils import *
+from handlers import *
 from datetime import datetime, timezone
 
 class FileConverter:
@@ -78,6 +79,7 @@ class FileConverter:
             labeled_group = traj_group.create_group("Labeled")
             labeled_group.attrs["Labels"] = labels
             labeled_group.attrs["NumLabeled"] = len(labels)
+            labeled_group.attrs['Unit'] = handler.c3d_data['parameters']['POINT']['UNITS']['value'][0]
             labeled_group.create_dataset("Data", data=labeled_data, compression="gzip")
             labeled_group.create_dataset("Type", data=labeled_type, compression="gzip")
             labeled_group.create_dataset("Residuals", data=labeled_residuals, compression="gzip")
@@ -129,7 +131,7 @@ class FileConverter:
 
                 origin = fp_data.metadata.get("origin") if fp_data.metadata else None
                 if origin is not None and num_frames > 0:
-                    position = np.zeros((4, num_frames), dtype=np.float64)
+                    position = np.zeros((3, num_frames), dtype=np.float64)
                     position[0:3, :] = np.asarray(origin, dtype=np.float64).reshape(3, 1)
                 else:
                     position = None
@@ -147,10 +149,28 @@ class FileConverter:
 
         print(f"Successfully converted {c3d_path} to {h5_path}")
 
-
+    @staticmethod
     def h5_to_trc(h5_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
         """Converts and h5 file to TRC format. Default values are set to convert from lab's h5 architecture to OpenSim TRC format."""
-        
+        h5h = H5Handler(h5_path)
+        trial = h5h.load_data()
+        trial.rotate_markers(axis, angle)
+        trial.rotate_forces(axis, angle)
 
+        if convert_to_meters:
+            trial.convert_units('m')
+        header_dict = {
+        'data_rate': trial.marker_rate,
+        'camera_rate': trial.marker_rate,
+        'num_frames': len(trial.markers[trial.marker_labels[0]].x),
+        'num_markers': len(trial.markers),
+        'units': trial.markers[trial.marker_labels[0]].unit if trial.marker_labels else 'M',
+        'orig_data_rate': trial.marker_rate,
+        'orig_data_start_frame': 0,
+        'orig_num_frames': len(trial.markers[trial.marker_labels[0]].x),
+        'marker_labels': trial.marker_labels
+        }
+                
+        write_trc(trc_path, header_dict, trial.markers)
 
 
