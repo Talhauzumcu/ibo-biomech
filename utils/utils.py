@@ -85,3 +85,69 @@ def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> Non
                 f.write(line + "\n")
         
         print(f"TRC file written to: {output_filepath}")
+
+
+def write_mot(output_filepath: str, forces: dict) -> None:
+        """
+        Write force plate data to a MOT file compatible with OpenSim.
+        
+        Args:
+            output_filepath: Path for the output MOT file
+            forces - Dictionary of ForceData instances, keyed by force plate name
+        """
+        if not forces:
+            raise Exception("No force data to write.")
+        
+        # Get number of force plates and sampling info
+        num_plates = len(forces)
+        first_force = next(iter(forces.values()))
+        num_samples = first_force.num_samples
+        sampling_rate = first_force.sampling_rate if first_force.sampling_rate else 'Unknown'
+        # Calculate number of columns: time + 9 columns per force plate (vx,vy,vz,px,py,pz,mx,my,mz)
+        num_columns = 1 + (num_plates * 9)
+        
+        with open(output_filepath, 'w') as f:
+            # Header
+            f.write(f"nColumns={num_columns}\n")
+            f.write(f"nRows={num_samples}\n")
+            f.write("DataType=double\n")
+            f.write("version=3\n")
+            f.write("endheader\n")
+            
+            # Column headers
+            header = "time"
+            for i in range(1, num_plates + 1):
+                header += f"\tground_force_{i}_vx\tground_force_{i}_vy\tground_force_{i}_vz"
+                header += f"\tground_force_{i}_px\tground_force_{i}_py\tground_force_{i}_pz"
+                header += f"\tground_moment_{i}_mx\tground_moment_{i}_my\tground_moment_{i}_mz"
+            f.write(header + "\n")
+            
+            # Data lines
+            force_plates = list(forces.values())
+            for sample_idx in range(num_samples):
+                time = sample_idx / sampling_rate
+                line = f"{time}"
+                
+                for plate in force_plates:
+                    # Force vector (vx, vy, vz)
+                    fx = plate.force[0, sample_idx]
+                    fy = plate.force[1, sample_idx]
+                    fz = plate.force[2, sample_idx]
+                    
+                    # Center of pressure (px, py, pz)
+                    px = plate.cop[0, sample_idx]
+                    py = plate.cop[1, sample_idx]
+                    pz = plate.cop[2, sample_idx]
+
+                    # Moment (mx, my, mz)
+                    mx = 0
+                    my = plate.Tz[sample_idx]
+                    mz = 0
+
+                    line += f"\t{fx}\t{fy}\t{fz}"
+                    line += f"\t{px}\t{py}\t{pz}"
+                    line += f"\t{mx}\t{my}\t{mz}"
+                
+                f.write(line + "\n")
+        
+        # print(f"MOT file written to: {output_filepath}")

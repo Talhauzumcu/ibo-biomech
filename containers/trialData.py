@@ -28,12 +28,22 @@ class TrialData:
         for marker in self.markers.values():
             marker.rotate(axis, angle_deg)
     
-    def convert_units(self, target_unit: str) -> None:
+    def convert_marker_units(self, target_unit: str) -> None:
         """Convert all marker trajectories to the specified unit.
             Only converts markers"""
         for marker in self.markers.values():
             marker.convert_units(target_unit)
     
+    def convert_force_units(self, target_unit: str) -> None:
+        """Convert all force plate data to the specified unit in terms of position (e.g. mm to m)."""
+        for force in self.forces.values():
+            force.convert_units(target_unit)
+    
+    def convert_units(self, target_unit: str) -> None:
+        """Convert all marker, analog, and force data to the specified unit."""
+        self.convert_marker_units(target_unit)
+        self.convert_force_units(target_unit)
+
     def rotate_forces(self, axis, angle_deg) -> None:
         """Rotate all force plate data around specified axis by given angle in degrees."""
         for force in self.forces.values():

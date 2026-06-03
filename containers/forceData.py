@@ -14,14 +14,21 @@ class ForceData:
     position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate origin
     rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation
     offset: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # ndarray(3, 1) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
-    Tz: np.ndarray = field(default_factory=lambda: np.zeros((1, 1))) # (1, n_samples) - Vertical force component used for gait event detection
+    Tz: np.ndarray = field(default_factory=lambda: np.zeros((1,))) # (n_samples,) - Vertical force component used for gait event detection
     coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
     
     def __post_init__(self):
         self.clean_nan()
+        self._parse_metadata()
+        self.num_samples = self.force.shape[1]
 
+    def _parse_metadata(self) -> None:
+        self.unit_force = self.metadata.get('unit_force', 'Unknown')
+        self.unit_moment = self.metadata.get('unit_moment', 'Unknown')
+        self.unit_cop = self.metadata.get('unit_position', 'Unknown')
+    
     def get_force_magnitude(self) -> np.ndarray:
         """Returns magnitude of force vector."""
         return np.sqrt(np.sum(self.force**2, axis=1))
@@ -88,6 +95,24 @@ class ForceData:
         self.cop = rotation_matrix @ self.cop
         self.position = rotation_matrix @ self.position
         self.rotation = rotation_matrix @ self.rotation
+
+    def convert_units(self, target_unit: str) -> None:
+        """Convert force units to target_unit (e.g. 'mm' to 'm'). Usually moments are in Nmm and COP is in mm"""
+        conversion_factors = {
+            ('mm', 'm'): 0.001,
+            ('m', 'mm'): 1000,
+        }
+        if self.unit_cop == target_unit:
+            return
+        key = (self.unit_cop, target_unit)
+        if key not in conversion_factors:
+            raise ValueError(f"Unsupported unit conversion: {self.unit_cop} to {target_unit}")
+        factor = conversion_factors[key]
+        self.moment *= factor
+        self.cop *= factor
+        self.Tz *= factor
+        self.unit_moment = f'N{target_unit}'
+        self.unit_cop = target_unit
         
     def plot(self) -> None:
         """Plot force, moment, and cop data."""
@@ -166,3 +191,7 @@ class ForceData:
     @property
     def z(self) -> np.ndarray:
         return self.position[2, :]
+    
+    @property
+    def unit_position(self) -> str:
+        return self.unit_cop

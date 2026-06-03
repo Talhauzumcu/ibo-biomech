@@ -155,10 +155,9 @@ class FileConverter:
         h5h = H5Handler(h5_path)
         trial = h5h.load_data()
         trial.rotate_markers(axis, angle)
-        trial.rotate_forces(axis, angle)
 
         if convert_to_meters:
-            trial.convert_units('m')
+            trial.convert_marker_units('m')
         header_dict = {
         'data_rate': trial.marker_rate,
         'camera_rate': trial.marker_rate,
@@ -181,3 +180,14 @@ class FileConverter:
         FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
         FileConverter.h5_to_trc(temp_h5_path, trc_path, axis, angle, convert_to_meters)
         os.remove(temp_h5_path)
+
+    @staticmethod
+    def h5_to_mot(h5_path: str, mot_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Converts an h5 file to OpenSim MOT format. This will include only GRFs."""
+        h5h = H5Handler(h5_path)
+        trial = h5h.load_data()
+        trial.rotate_forces(axis, angle)
+        if convert_to_meters:
+            trial.convert_force_units('m') #c3d data is often saved as mm and Nmm.
+
+        write_mot(mot_path, trial.forces)
