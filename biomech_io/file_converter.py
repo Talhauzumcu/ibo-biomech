@@ -174,3 +174,10 @@ class FileConverter:
         write_trc(trc_path, header_dict, trial.markers)
 
 
+    @staticmethod
+    def c3d_to_trc(c3d_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Convenience method to convert directly from c3d to trc."""
+        temp_h5_path = ".temp_conversion.h5"
+        FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
+        FileConverter.h5_to_trc(temp_h5_path, trc_path, axis, angle, convert_to_meters)
+        os.remove(temp_h5_path)
