@@ -32,7 +32,7 @@ class FileConverter:
             labeled_data = np.empty((0, 4, num_frames), dtype=np.float64)
             labeled_type = np.empty((0, num_frames), dtype=np.int8)
 
-        labeled_residuals = handler.c3d_data['data']['meta_points']['residuals'].reshape(35,1,141)
+        labeled_residuals = handler.c3d_data['data']['meta_points']['residuals']
         # C3DHandler currently does not handle unlabeled trajectories.
         unlabeled_data = np.empty((0, 4, num_frames), dtype=np.float64)
         unlabeled_type = np.empty((0, num_frames), dtype=np.int8)
@@ -191,3 +191,9 @@ class FileConverter:
             trial.convert_force_units('m') #c3d data is often saved as mm and Nmm.
 
         write_mot(mot_path, trial.forces)
+
+    @staticmethod
+    def h5_to_opensim(h5_path: str, mot_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Convenience method to convert an h5 file to OpenSim TRC and MOT formats."""
+        FileConverter.h5_to_trc(h5_path, trc_path, axis, angle, convert_to_meters)
+        FileConverter.h5_to_mot(h5_path, mot_path, axis, angle, convert_to_meters)

@@ -108,4 +108,4 @@ class TrialData:
         return self.events.get(name)
     
     def __repr__(self) -> str:
-        return f"TrialData(trial_name={self.trial_name}, markers={list(self.markers.keys())}, analogs={list(self.analogs.keys())}, forces={list(self.forces.keys())})"
+        return f"TrialData \n {'-'*50}\n trial_name={self.trial_name}\n{'-'*50}\nmetadata={self.metadata}\n{'-'*50}\nmarkers={list(self.markers.keys())}\n {'-'*50}\nanalogs={list(self.analogs.keys())}\n{'-'*50}\nforces={list(self.forces.keys())})"
