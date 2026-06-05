@@ -17,13 +17,15 @@ FileConverter.c3d_to_trc(filename, 'test_output_direct.trc')
 FileConverter.h5_to_mot('test_output.h5', 'test_output.mot')
 #%%
 FileConverter.h5_to_opensim('test_output.h5', 'test_output.mot', 'test_output.trc')
-# %%
+#%%
+FileConverter.c3d_to_opensim(filename, 'test_output_direct.mot', 'test_output_direct.trc')
+#%%
 h5h = H5Handler('test_output.h5')
 trialdata = h5h.load_data()
-print(trialdata)
-trialdata.forces['forceplate_0'].plot()
-trialdata.forces['forceplate_0'].lowpass_filter(5)
-trialdata.forces['forceplate_0'].plot()
+# print(trialdata)
+# trialdata.forces['forceplate_0'].plot()
+# trialdata.forces['forceplate_0'].lowpass_filter(5)
+# trialdata.forces['forceplate_0'].plot()
 #%%
 # h5_file = h5py.File('test_output.h5', 'r')
 # %%

@@ -197,3 +197,27 @@ class FileConverter:
         """Convenience method to convert an h5 file to OpenSim TRC and MOT formats."""
         FileConverter.h5_to_trc(h5_path, trc_path, axis, angle, convert_to_meters)
         FileConverter.h5_to_mot(h5_path, mot_path, axis, angle, convert_to_meters)
+
+    @staticmethod
+    def c3d_to_trc(c3d_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Convenience method to convert directly from c3d to trc."""
+        temp_h5_path = ".temp_conversion.h5"
+        FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
+        FileConverter.h5_to_trc(temp_h5_path, trc_path, axis, angle, convert_to_meters)
+        os.remove(temp_h5_path)
+    
+    @staticmethod
+    def c3d_to_mot(c3d_path: str, mot_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Convenience method to convert directly from c3d to mot."""
+        temp_h5_path = ".temp_conversion.h5"
+        FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
+        FileConverter.h5_to_mot(temp_h5_path, mot_path, axis, angle, convert_to_meters)
+        os.remove(temp_h5_path)
+        
+    @staticmethod
+    def c3d_to_opensim(c3d_path: str, mot_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
+        """Convenience method to convert directly from c3d to OpenSim TRC and MOT formats."""
+        temp_h5_path = ".temp_conversion.h5"
+        FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
+        FileConverter.h5_to_opensim(temp_h5_path, mot_path, trc_path, axis, angle, convert_to_meters)
+        os.remove(temp_h5_path)
