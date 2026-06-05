@@ -29,6 +29,184 @@ from ibo_biomech.biomech_io import FileConverter
 
 ---
 
+## Loading an HDF5 File
+
+`H5Handler` reads lab HDF5 files and returns a `TrialData` object.
+
+```python
+from ibo_biomech import H5Handler
+
+handler = H5Handler("trial.h5")
+trial = handler.load_data()   # returns TrialData
+
+print(trial.trial_name)
+print(trial.marker_labels)
+print(trial.analog_labels)
+print(trial.marker_rate)
+
+# Access individual channels
+marker = trial.markers["L_Ankle"]
+force  = trial.forces["forceplate_0"]
+emg    = trial.analogs["EMG_VastusLat"]
+```
+
+### Saving processed data back to HDF5
+
+The handler uses the original file as a template and overwrites only the data arrays, preserving all other groups (events, rigid bodies, etc.).
+
+```python
+handler.save_data(trial, out_path="trial_processed.h5")
+```
+
+---
+
+## File Conversion
+
+`FileConverter` provides static methods for converting between formats. No instance needed.
+
+```python
+from ibo_biomech import FileConverter
+
+# C3D → HDF5
+FileConverter.c3d_to_h5("trial.c3d", "trial.h5")
+
+# HDF5 → OpenSim TRC (markers) and MOT (forces)
+FileConverter.h5_to_trc("trial.h5", "trial.trc")
+FileConverter.h5_to_mot("trial.h5", "trial.mot")
+FileConverter.h5_to_opensim("trial.h5", "trial.mot", "trial.trc")
+
+# C3D → OpenSim (direct, no intermediate file kept)
+FileConverter.c3d_to_trc("trial.c3d", "trial.trc")
+FileConverter.c3d_to_mot("trial.c3d", "trial.mot")
+FileConverter.c3d_to_opensim("trial.c3d", "trial.mot", "trial.trc")
+```
+
+All conversion methods apply a default `-90° rotation around the X axis` and convert units to metres to match OpenSim's coordinate system. You can override these:
+
+```python
+FileConverter.h5_to_trc("trial.h5", "trial.trc", axis='x', angle=-90, convert_to_meters=True)
+```
+---
+## Working with TrialData
+
+`TrialData` is the central data container returned by `H5Handler.load_data()`.
+
+```python
+trial = H5Handler("trial.h5").load_data()
+
+# Convenience accessors
+print(trial.get_marker_names())
+print(trial.get_force_names())
+print(trial.get_analog_names())
+
+marker = trial.get_marker("R_Knee")
+fp     = trial.get_force("forceplate_0")
+emg    = trial.get_analog("EMG_VastusLat")
+emg2   = trial.get_analog_by_channel(3)
+
+# Add a virtual marker
+import numpy as np
+mid = MarkerData(
+    name="MidKnee",
+    x=(trial.markers["R_Knee"].x + trial.markers["L_Knee"].x) / 2,
+    y=(trial.markers["R_Knee"].y + trial.markers["L_Knee"].y) / 2,
+    z=(trial.markers["R_Knee"].z + trial.markers["L_Knee"].z) / 2,
+    sampling_rate=trial.marker_rate
+)
+trial.add_marker(mid)
+
+# Filter all channels with separate cutoffs per data type
+trial.lowpass_filter(cutoff_marker=10, cutoff_analog=500, cutoff_force=50)
+```
+
+## Signal Processing
+
+All filtering and processing methods modify data **in-place**.
+
+### Filtering markers
+
+```python
+marker = trial.markers["R_Knee"]
+marker.lowpass_filter(cutoff=10.0, order=4)   # 4th-order Butterworth
+marker.highpass_filter(cutoff=20.0, order=4)
+```
+
+### Filtering force data
+
+```python
+fp = trial.forces["forceplate_0"]
+fp.lowpass_filter(cutoff=50.0, order=4)
+fp.highpass_filter(cutoff=10.0, order=4)
+fp.filter_low_forces(threshold=10.0)  # zero out frames where |F| < 10 N
+fp.downsample(factor=4)
+```
+
+### Filtering analog signals
+
+```python
+emg = trial.analogs["EMG_VastusLat"]
+emg.lowpass_filter(cutoff=500.0)
+emg.highpass_filter(cutoff=20.0)
+```
+
+### Filtering everything at once via C3DHandler
+
+```python
+handler.lowpass_filter_all(cutoff=10.0, order=4)   # markers + forces
+handler.lowpass_filter_markers(cutoff=10.0)
+handler.lowpass_filter_force(cutoff=50.0)
+```
+
+### Cropping
+
+```python
+# Crop a single channel
+trial.markers["R_Knee"].crop(start_idx=100, end_idx=500)
+
+# Crop everything in a TrialData at once
+trial.crop(start_idx=100, end_idx=500)
+```
+
+### Rotation
+
+Rotates all position data (markers, forces, CoP) around the specified axis.
+
+```python
+trial.rotate_data(axis='x', angle_deg=-90)
+
+# Or on an individual marker
+marker.rotate(axis='x', angle_deg=90)
+
+# Or on a TrialData (markers and forces)
+trial.rotate_markers(axis='x', angle_deg=-90)
+trial.rotate_forces(axis='x', angle_deg=-90)
+```
+
+### Unit conversion
+
+```python
+trial.convert_to_meters()                 # trial-level (mm or cm → m)
+
+marker.convert_units('m')                   # single marker
+trial.convert_marker_units('m')             # all markers in TrialData
+trial.convert_force_units('m')              # CoP and moments in TrialData
+trial.convert_units('m')                    # markers + forces together
+```
+
+### Plotting
+
+All container types have a `.plot()` method for quick inspection:
+
+```python
+trial.markers["R_Knee"].plot()
+trial.forces["forceplate_0"].plot()
+trial.analogs["EMG_VastusLat"].plot()
+```
+
+---
+
+
+
 ## Loading a C3D File
 
 `C3DHandler` reads a C3D file and parses it into typed container objects.
@@ -85,73 +263,6 @@ print(emg.sampling_rate)
 print(emg.unit)
 ```
 
----
-
-## Loading an HDF5 File
-
-`H5Handler` reads lab HDF5 files and returns a `TrialData` object.
-
-```python
-from ibo_biomech import H5Handler
-
-handler = H5Handler("trial.h5")
-trial = handler.load_data()   # returns TrialData
-
-print(trial.trial_name)
-print(trial.marker_labels)
-print(trial.analog_labels)
-print(trial.marker_rate)
-
-# Access individual channels
-marker = trial.markers["L_Ankle"]
-force  = trial.forces["forceplate_0"]
-emg    = trial.analogs["EMG_VastusLat"]
-```
-
-### Loading as a Subject
-
-```python
-subject = handler.load_subject_data()   # returns Subject
-trial   = subject.get_trial_by_idx(0)
-```
-
-### Saving processed data back to HDF5
-
-The handler uses the original file as a template and overwrites only the data arrays, preserving all other groups (events, rigid bodies, etc.).
-
-```python
-handler.save_data(trial, out_path="trial_processed.h5")
-```
-
----
-
-## File Conversion
-
-`FileConverter` provides static methods for converting between formats. No instance needed.
-
-```python
-from ibo_biomech import FileConverter
-
-# C3D → HDF5
-FileConverter.c3d_to_h5("trial.c3d", "trial.h5")
-
-# HDF5 → OpenSim TRC (markers) and MOT (forces)
-FileConverter.h5_to_trc("trial.h5", "trial.trc")
-FileConverter.h5_to_mot("trial.h5", "trial.mot")
-FileConverter.h5_to_opensim("trial.h5", "trial.mot", "trial.trc")
-
-# C3D → OpenSim (direct, no intermediate file kept)
-FileConverter.c3d_to_trc("trial.c3d", "trial.trc")
-FileConverter.c3d_to_mot("trial.c3d", "trial.mot")
-FileConverter.c3d_to_opensim("trial.c3d", "trial.mot", "trial.trc")
-```
-
-All conversion methods apply a default `-90° rotation around the X axis` and convert units to metres to match OpenSim's coordinate system. You can override these:
-
-```python
-FileConverter.h5_to_trc("trial.h5", "trial.trc", axis='x', angle=-90, convert_to_meters=True)
-```
-
 ### Exporting directly from C3DHandler
 
 If you have already loaded and processed a C3DHandler (e.g. filtered or rotated), you can export without going through HDF5:
@@ -167,150 +278,3 @@ handler.process_and_export("output/trial", axis='x', angle_deg=-90, convert_to_m
 
 ---
 
-## Signal Processing
-
-All filtering and processing methods modify data **in-place**.
-
-### Filtering markers
-
-```python
-marker = handler.markers["R_Knee"]
-marker.lowpass_filter(cutoff=10.0, order=4)   # 4th-order Butterworth
-marker.highpass_filter(cutoff=20.0, order=4)
-```
-
-### Filtering force data
-
-```python
-fp = handler.forces["forceplate_0"]
-fp.lowpass_filter(cutoff=50.0, order=4)
-fp.highpass_filter(cutoff=10.0, order=4)
-fp.filter_low_forces(threshold=10.0)  # zero out frames where |F| < 10 N
-fp.downsample(factor=4)
-```
-
-### Filtering analog signals
-
-```python
-emg = handler.analogs["EMG_VastusLat"]
-emg.lowpass_filter(cutoff=500.0)
-emg.highpass_filter(cutoff=20.0)
-```
-
-### Filtering everything at once via C3DHandler
-
-```python
-handler.lowpass_filter_all(cutoff=10.0, order=4)   # markers + forces
-handler.lowpass_filter_markers(cutoff=10.0)
-handler.lowpass_filter_force(cutoff=50.0)
-```
-
-### Cropping
-
-```python
-# Crop a single channel
-handler.markers["R_Knee"].crop(start_idx=100, end_idx=500)
-
-# Crop everything in a TrialData at once
-trial.crop(start_idx=100, end_idx=500)
-```
-
-### Rotation
-
-Rotates all position data (markers, forces, CoP) around the specified axis.
-
-```python
-handler.rotate_data(axis='x', angle_deg=-90)
-
-# Or on an individual marker
-marker.rotate(axis='x', angle_deg=90)
-
-# Or on a TrialData (markers and forces)
-trial.rotate_markers(axis='x', angle_deg=-90)
-trial.rotate_forces(axis='x', angle_deg=-90)
-```
-
-### Unit conversion
-
-```python
-handler.convert_to_meters()                 # C3DHandler-level (mm or cm → m)
-
-marker.convert_units('m')                   # single marker
-trial.convert_marker_units('m')             # all markers in TrialData
-trial.convert_force_units('m')              # CoP and moments in TrialData
-trial.convert_units('m')                    # markers + forces together
-```
-
-### Plotting
-
-All container types have a `.plot()` method for quick inspection:
-
-```python
-handler.markers["R_Knee"].plot()
-handler.forces["forceplate_0"].plot()
-handler.analogs["EMG_VastusLat"].plot()
-```
-
----
-
-## Working with TrialData
-
-`TrialData` is the central data container returned by `H5Handler.load_data()`.
-
-```python
-trial = H5Handler("trial.h5").load_data()
-
-# Convenience accessors
-print(trial.get_marker_names())
-print(trial.get_force_names())
-print(trial.get_analog_names())
-
-marker = trial.get_marker("R_Knee")
-fp     = trial.get_force("forceplate_0")
-emg    = trial.get_analog("EMG_VastusLat")
-emg2   = trial.get_analog_by_channel(3)
-
-# Add a virtual marker
-import numpy as np
-mid = MarkerData(
-    name="MidKnee",
-    x=(trial.markers["R_Knee"].x + trial.markers["L_Knee"].x) / 2,
-    y=(trial.markers["R_Knee"].y + trial.markers["L_Knee"].y) / 2,
-    z=(trial.markers["R_Knee"].z + trial.markers["L_Knee"].z) / 2,
-    sampling_rate=trial.marker_rate
-)
-trial.add_marker(mid)
-
-# Filter all channels with separate cutoffs per data type
-trial.lowpass_filter(cutoff_marker=10, cutoff_analog=500, cutoff_force=50)
-```
-
----
-
-## Subject Management
-
-`Subject` holds multiple trials for one participant along with demographic data.
-
-```python
-from ibo_biomech import Subject, H5Handler
-
-subject = Subject(id="P01", condition="post-op", body_mass=72.5, body_height=1.78, age=34)
-
-# Load trials from H5 files and attach them
-for path in ["trial1.h5", "trial2.h5"]:
-    handler = H5Handler(path)
-    trial = handler.load_data()
-    subject.add_trial(trial_name=trial.trial_name, trial_data=trial)
-
-print(subject)                       # Subject(id=P01, trials=[...])
-trial = subject.get_trial_by_idx(0)
-
-# Filter all trials at once
-subject.lowpass_filter(cutoff_marker=10, cutoff_analog=500, cutoff_force=50)
-
-# Cache to disk (uses pickle — fast for repeated loading)
-subject.save_cache(cache_dir="cache/")
-
-# Load from cache later
-subject = Subject.load_from_cache("cache/P01_cache.pkl")
-```
