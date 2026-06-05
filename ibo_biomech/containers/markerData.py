@@ -87,7 +87,7 @@ class MarkerData:
         time = np.arange(len(self.x)) / self.sampling_rate if self.sampling_rate else np.arange(len(self.x))
         
         plt.figure(figsize=(12, 8))
-        plt.plot(time, self.get_trajectory())
+        plt.plot(time, self.get_trajectory().T)
         plt.xlabel('Time (s)')
         plt.ylabel('Position (mm)')
         plt.title(f'Marker: {self.name}')

@@ -1,7 +1,5 @@
 #%%
-from handlers import *
-from biomech_io import *
-import h5py
+from ibo_biomech import C3DHandler, H5Handler, FileConverter
 #%%
 filename = '03_PRE_GANG12_01.c3d'
 #%%
