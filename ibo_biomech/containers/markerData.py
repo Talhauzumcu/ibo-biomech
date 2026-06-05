@@ -1,7 +1,7 @@
 from __future__ import annotations
 import numpy as np
 from typing import Dict, List, Optional, Any
-from utils.utils import *
+from ibo_biomech.utils.utils import *
 from dataclasses import dataclass, field
 
 @dataclass

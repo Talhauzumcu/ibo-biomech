@@ -1,7 +1,8 @@
 from ezc3d import c3d
 import os
 from typing import Dict, List, Optional, Tuple, Union
-from containers import AnalogData, ForceData, MarkerData
+from ibo_biomech.containers import AnalogData, ForceData, MarkerData
+from ibo_biomech.utils.utils import get_rotation_matrix
 import numpy as np
 from copy import deepcopy
 

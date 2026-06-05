@@ -4,4 +4,14 @@ __pycache__/
 *.pyd
 .Python
 *.egg-info/
+dist/
+build/
+.venv/
+.env/
 Docs/
+
+# Data files
+*.c3d
+*.h5
+*.trc
+*.mot

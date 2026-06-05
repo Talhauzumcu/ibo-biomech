@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ibo-biomech"
+version = "0.1.0"
+description = "A Python library for processing and analyzing biomechanical motion capture data"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Talha", email = "talha.uzumcu21@gmail.com" }]
+keywords = ["biomechanics", "motion capture", "c3d", "opensim", "gait"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = ["numpy", "h5py", "ezc3d", "scipy"]
+
+[project.urls]
+Homepage = "https://github.com/Talhauzumcu/ibo-biomech"
+Repository = "https://github.com/Talhauzumcu/ibo-biomech"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ibo_biomech"]

@@ -6,7 +6,7 @@ from typing import Dict, Optional, Any, List
 import h5py
 import numpy as np
 
-from containers import AnalogData, ForceData, MarkerData, TrialData, Subject
+from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData, Subject
 
 
 class H5Handler:

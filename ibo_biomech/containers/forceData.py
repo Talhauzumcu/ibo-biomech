@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from utils.utils import * 
+from ibo_biomech.utils.utils import *
 
 @dataclass
 class ForceData:

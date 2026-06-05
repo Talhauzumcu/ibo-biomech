@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
-from utils.utils import *
-from handlers import *
+from ibo_biomech.utils.utils import *
+from ibo_biomech.handlers import *
 from datetime import datetime, timezone
 
 class FileConverter:
