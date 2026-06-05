@@ -41,6 +41,7 @@ class ForceData:
         self.location = np.nan_to_num(self.location)
         self.position = np.nan_to_num(self.position)
         self.rotation = np.nan_to_num(self.rotation)
+        self.Tz = np.nan_to_num(self.Tz)
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply low-pass Butterworth filter to force, moment, and cop data."""
