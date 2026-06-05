@@ -1,4 +1,4 @@
-PathFileType	4	(X/Y/Z)	C:\Users\talha\OneDrive\Belgeler\GitHub\ibo-biomech\03_PRE_GANG12_01.trc
+PathFileType	4	(X/Y/Z)	/home/talha/Desktop/python_projects/ibo-biomech/test_output.trc
 DataRate	CameraRate	NumFrames	NumMarkers	Units	OrigDataRate	OrigDataStartFrame	OrigNumFrames
 120.000000	120.000000	193	31	m	120.000000	0	193
 Frame#	Time	R_Acromion			L_Acromion			R_Kneemedial			R_ToesTop			R_Shin			R_Knee			L_Ankle			L_Kneemedial			L_ToesTop			L_Knee			L_Meta1			L_Meta5			L_Shin			R_ASIS			R_Meta1			R_MalMed			R_CalMed			L_Trochanter			R_Meta5			L_MalMed			L_CalMed			L_CalLat			L_HeelTop			R_Trochanter			R_HeelTop			R_Ankle			C7_SpinousProc			L_PSIS			R_CalLat			R_PSIS			L_ASIS		
