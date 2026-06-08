@@ -100,6 +100,10 @@ class TrialData:
         """Get marker data by name."""
         return self.markers.get(name)
     
+    def get_markers(self, names: List[str]) -> Dict[str, MarkerData]:
+        """Get multiple marker data by a list of names."""
+        return [self.markers.get(name) for name in names]
+    
     def get_analog(self, name: str) -> Optional[AnalogData]:
         """Get analog data by name."""
         return self.analogs.get(name)
