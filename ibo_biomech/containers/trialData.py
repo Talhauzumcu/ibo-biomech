@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from .forceData import ForceData
 from .markerData import MarkerData
 from .analogData import AnalogData
+from .emgData import EMGData
 
 """This module defines the TrialData container class for storing trial-level data including markers, analogs, and forces."""
 
@@ -14,6 +15,7 @@ class TrialData:
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
+    emgs: Dict[str, EMGData] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -23,6 +25,20 @@ class TrialData:
         self.marker_rate = next(iter(self.markers.values())).sampling_rate if self.markers else None
         self.analog_rate = next(iter(self.analogs.values())).sampling_rate if self.analogs else None
     
+    def parse_EMG_data(self, EMGChannels: List[int]) -> None:
+        """Given a list of EMG channel numbers, extract the corresponding analog data and create EMGData instances for each channel."""
+        for channel in EMGChannels:
+            analog = self.get_analog_by_channel(channel)
+            if analog is not None:
+                emg = EMGData(
+                    name=analog.name,
+                    data=analog.data,
+                    sampling_rate=analog.sampling_rate,
+                    unit=analog.unit,
+                    channel=analog.channel
+                )
+                self.emgs[analog.name] = emg
+
     def rotate_markers(self, axis, angle_deg) -> None:
         """Rotate all marker trajectories around specified axis by given angle in degrees."""
         for marker in self.markers.values():
