@@ -61,12 +61,24 @@ class TrialData:
     def lowpass_filter(self, cutoff_marker: float, cutoff_analog: float, cutoff_force: float, order: int = 4) -> None:
         """Apply low-pass Butterworth filter to all marker, analog and force data. 
         Cutoff frequencies can be specified separately for markers, analogs, and forces."""
+        self.lowpass_filter_markers(cutoff_marker, order)
+        self.lowpass_filter_analogs(cutoff_analog, order)
+        self.lowpass_filter_forces(cutoff_force, order)
+
+    def lowpass_filter_markers(self, cutoff_freq: float, order: int = 4) -> None:
+        """Apply low-pass Butterworth filter to all marker data."""
         for marker in self.markers.values():
-            marker.lowpass_filter(cutoff_marker, order)
+            marker.lowpass_filter(cutoff_freq, order)
+    
+    def lowpass_filter_analogs(self, cutoff_freq: float, order: int = 4) -> None:
+        """Apply low-pass Butterworth filter to all analog data."""
         for analog in self.analogs.values():
-            analog.lowpass_filter(cutoff_analog, order)
+            analog.lowpass_filter(cutoff_freq, order)
+
+    def lowpass_filter_forces(self, cutoff_freq: float, order: int = 4) -> None:
+        """Apply low-pass Butterworth filter to all force plate data."""
         for force in self.forces.values():
-            force.lowpass_filter(cutoff_force, order)
+            force.lowpass_filter(cutoff_freq, order)
 
     def add_marker(self, marker_data: MarkerData) -> None:
         """Add a marker to the trial."""
