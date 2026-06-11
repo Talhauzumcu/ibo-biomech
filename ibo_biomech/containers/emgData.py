@@ -21,7 +21,8 @@ class EMGData:
 
     def process_emg(self) -> np.ndarray:
         self.clean_nan()
-        rectified_signal = np.power(self.data, 2)
+        filtered_signal = self.highpass_filter(self.data, cutoff=30, order=2)
+        rectified_signal = np.power(filtered_signal, 2)
         enveloped_signal = self._envelope_signal(rectified_signal, cutoff=6, order=2)
         normalized_signal = self._normalize_emg(enveloped_signal)
         return normalized_signal
@@ -34,6 +35,22 @@ class EMGData:
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
         return filtfilt(b, a, signal, axis=0)
 
+    def lowpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
+        """Apply low-pass Butterworth filter to the analog signal."""
+        from scipy.signal import butter, filtfilt
+        if self.sampling_rate is None:
+            raise ValueError("Sampling rate must be set to apply low-pass filter.")
+        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
+        return filtfilt(b, a, self.data, axis=0)
+    
+    def highpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
+        """Apply high-pass Butterworth filter to the analog signal."""
+        from scipy.signal import butter, filtfilt
+        if self.sampling_rate is None:
+            raise ValueError("Sampling rate must be set to apply high-pass filter.")
+        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
+        return filtfilt(b, a, self.data, axis=0)
+    
     @staticmethod
     def _normalize_emg(emg_signal):
         max_amplitude = np.max(emg_signal)
