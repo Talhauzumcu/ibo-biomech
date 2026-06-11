@@ -21,9 +21,9 @@ class EMGData:
 
     def process_emg(self) -> np.ndarray:
         self.clean_nan()
-        # filtered_signal = self.highpass_filter(self.data, cutoff=30, order=2)
-        rectified_signal = np.power(self.data, 2)
-        enveloped_signal = self._envelope_signal(rectified_signal, cutoff=6, order=2)
+        filtered_signal = self.highpass_filter(cutoff=30, order=2)
+        rectified_signal = np.power(filtered_signal, 2)
+        enveloped_signal = self._envelope_signal(rectified_signal, cutoff=10, order=2)
         normalized_signal = self._normalize_emg(enveloped_signal)
         return normalized_signal
     
