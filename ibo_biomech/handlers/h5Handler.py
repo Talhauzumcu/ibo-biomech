@@ -10,25 +10,46 @@ from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData,
 
 
 class H5Handler:
-    """Handler for reading and writing lab HDF5 files.
+    """Read and write the lab's HDF5 trial format.
 
-    Metadata fields (SubjectID, Condition, BodyMass, etc.) are intentionally
-    outside the scope of this handler. To update them after saving, use h5py
-    directly:
+    Reading returns a fully populated :class:`~ibo_biomech.containers.TrialData`.
+    Writing uses the original file as a template and overwrites only the datasets
+    that :class:`TrialData` owns, preserving all other groups.
+
+    Metadata fields (``SubjectID``, ``Condition``, ``BodyMass``, ...) are
+    intentionally outside the scope of this handler. To update them after
+    saving, use h5py directly::
 
         with h5py.File("trial_processed.h5", "r+") as f:
             f["MetaData"].attrs["SubjectID"] = "P01"
             f["MetaData"].attrs["Condition"] = "walking"
+
+    Attributes:
+        h5_path: Path to the source HDF5 file.
+        trial_name: Trial name derived from the file name.
     """
 
     def __init__(self, h5_path: str) -> None:
+        """Initialize the handler.
+
+        Args:
+            h5_path: Path to an existing HDF5 file.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
         if not os.path.exists(h5_path):
             raise FileNotFoundError(f"H5 file not found: {h5_path}")
         self.h5_path = h5_path
         self.trial_name = os.path.splitext(os.path.basename(h5_path))[0]
 
     def load_data(self) -> TrialData:
-        """Read the HDF5 file and return a fully populated TrialData object."""
+        """Read the HDF5 file and return a fully populated trial.
+
+        Returns:
+            A :class:`~ibo_biomech.containers.TrialData` with markers, analogs,
+            forces and metadata.
+        """
         with h5py.File(self.h5_path, "r") as h5f:
             markers = self._load_markers(h5f)
             analogs = self._load_analogs(h5f)
@@ -44,7 +65,14 @@ class H5Handler:
         )
 
     def load_subject_data(self) -> Subject:
-        """Loads trial data and creates a subject instance with the metadata. Created subject instance has the trialdata added."""
+        """Read the file into a subject populated from its metadata.
+
+        Builds a :class:`~ibo_biomech.containers.Subject` from the file's
+        ``MetaData`` attributes and attaches the loaded trial to it.
+
+        Returns:
+            A :class:`~ibo_biomech.containers.Subject` containing the trial.
+        """
         trial_data = self.load_trial_data()
         with h5py.File(self.h5_path, "r") as h5f:
             meta = h5f["MetaData"].attrs

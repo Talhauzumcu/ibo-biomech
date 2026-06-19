@@ -7,14 +7,27 @@ import numpy as np
 from copy import deepcopy
 
 class C3DHandler:
-    """Handler class for loading and parsing C3D files using ezc3d library."""
-    
+    """Load, manipulate and export C3D motion-capture files.
+
+    Wraps the :mod:`ezc3d` reader. After :meth:`load_data`, parsed channels are
+    available as the :attr:`markers`, :attr:`analogs` and :attr:`forces`
+    dictionaries, and the raw ezc3d structure is kept on :attr:`c3d_data` so the
+    file can be modified and re-written.
+
+    Attributes:
+        filepath: Path to the source C3D file.
+        c3d_data: Underlying ezc3d data structure (``None`` until loaded).
+        markers: Mapping of marker label to :class:`~ibo_biomech.containers.MarkerData`.
+        analogs: Mapping of channel label to :class:`~ibo_biomech.containers.AnalogData`.
+        forces: Mapping of plate name to :class:`~ibo_biomech.containers.ForceData`.
+    """
+
     def __init__(self, filepath: Optional[str] = None):
-        """
-        Initialize C3DHandler.
-        
+        """Initialize the handler.
+
         Args:
-            filepath: Path to C3D file to load (optional)
+            filepath: Path to the C3D file to load. The file is not read until
+                :meth:`load_data` is called.
         """
         self.filepath = filepath
         self.c3d_data = None
@@ -60,14 +73,14 @@ class C3DHandler:
     
 
     def load_data(self) -> None:
-        """
-        Load and parse C3D file data into container objects.
-        
+        """Read the C3D file and parse it into container objects.
+
+        Populates :attr:`markers`, :attr:`analogs` and :attr:`forces` and stores
+        the raw structure on :attr:`c3d_data`.
+
         Raises:
-            FileNotFoundError: If the file doesn't exist
-            Exception: If there's an error reading the C3D file
-        Returns:
-            None
+            FileNotFoundError: If the file does not exist.
+            Exception: If the C3D file cannot be read or parsed.
         """
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"C3D file not found: {self.filepath}")
@@ -172,12 +185,23 @@ class C3DHandler:
             )
 
     def add_marker(self, marker: MarkerData) -> None:
-        """Add a MarkerData object to the handler."""
+        """Add a marker to both the handler and the underlying C3D structure.
+
+        Args:
+            marker: The marker to add.
+        """
         self.markers[marker.name] = marker
         self._add_marker_to_c3d(marker)
 
     def _add_marker_to_c3d(self, marker: MarkerData) -> None:
-        """Add a MarkerData object to the c3d data structure."""
+        """Append a marker to the raw ezc3d point data and labels.
+
+        Args:
+            marker: The marker to add. Skipped if its name already exists.
+
+        Raises:
+            Exception: If no C3D data has been loaded.
+        """
         if self.c3d_data is None:
             raise Exception("No C3D data loaded to add marker to.")
 
@@ -191,6 +215,20 @@ class C3DHandler:
             print(f"Marker {marker.name} already exists in C3D data. Skipping addition to C3D structure.")
 
     def write_c3d(self, output_filepath: str) -> None:
+        """Write the current C3D structure to disk.
+
+        Deletes the cached ``meta_points`` so ezc3d regenerates them for any
+        markers added in memory.
+
+        Args:
+            output_filepath: Destination path for the C3D file.
+
+        Returns:
+            The path that was written.
+
+        Raises:
+            Exception: If no C3D data has been loaded.
+        """
         #Check if all marker data exist in the c3d structure
         if self.c3d_data is None:
             raise Exception("No C3D data loaded to write.")
@@ -248,11 +286,14 @@ class C3DHandler:
                 force.metadata['origin'] = rotated_origin
 
     def convert_to_meters(self) -> None:
-        """
-        Convert all position data (markers and force CoP) to meters.
-        
-        Args:
-            current_unit: Current unit of the data ('mm' for millimeters, 'cm' for centimeters)
+        """Convert all position data (markers and force CoP) to metres.
+
+        The source unit is read from the C3D ``POINT.UNITS`` parameter; ``mm``
+        and ``cm`` are converted, ``m`` is a no-op.
+
+        Raises:
+            ValueError: If the C3D unit is not one of ``'mm'``, ``'cm'`` or
+                ``'m'``.
         """
         current_unit = self.c3d_data['parameters']['POINT']['UNITS']['value'][0]
         
@@ -438,11 +479,13 @@ class C3DHandler:
         Convenience method to rotate data, convert units, and export to both TRC and MOT files.
         
         Args:
-            fullpath: Full path for the output files (without extension)
-            axis: Axis to rotate around ('x', 'y', or 'z'), None to skip rotation
-            angle_deg: Rotation angle in degrees, None to skip rotation
-            convert_to_meters: Whether to convert position data to meters (default True)
-            current_unit: Current unit of position data if converting ('mm', 'cm', or 'm')
+            fullpath: Output path without extension; ``.trc`` and ``.mot`` are
+                appended.
+            axis: Axis to rotate about (``'x'``, ``'y'`` or ``'z'``); ``None`` to
+                skip rotation.
+            angle_deg: Rotation angle in degrees; ``None`` to skip rotation.
+            convert_to_meters: Whether to convert position data to metres.
+                Defaults to ``True``.
         """
         if axis is not None and angle_deg is not None:
             # print(f"Rotating data {angle_deg} degrees around {axis}-axis...")
@@ -462,23 +505,42 @@ class C3DHandler:
 
     
     def lowpass_filter_force(self, cutoff: float, order: int = 4) -> None:
-        """Apply low-pass Butterworth filter to force data."""
+        """Low-pass filter every force plate in place.
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+        """
         for force in self.forces.values():
             force.lowpass_filter(cutoff, order)
 
     def lowpass_filter_markers(self, cutoff: float, order: int = 4) -> None:
-        """Apply low-pass Butterworth
-        filter to marker trajectories."""
+        """Low-pass filter every marker trajectory in place.
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+        """
         for marker in self.markers.values():
             marker.lowpass_filter(cutoff, order)
-    
+
     def lowpass_filter_all(self, cutoff: float, order: int = 4) -> None:
-        """Apply low-pass Butterworth filter to both marker trajectories and force data."""
+        """Low-pass filter both markers and force plates in place.
+
+        Args:
+            cutoff: Cutoff frequency in Hz applied to all channels.
+            order: Filter order. Defaults to 4.
+        """
         self.lowpass_filter_markers(cutoff, order)
         self.lowpass_filter_force(cutoff, order)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
-        """Set forces below threshold to zero."""
+        """Zero out low-magnitude frames on every force plate.
+
+        Args:
+            threshold: Force magnitude below which frames are zeroed, in newtons.
+                Defaults to 10.0.
+        """
         for force in self.forces.values():
             force.filter_low_forces(threshold)
 
@@ -560,11 +622,29 @@ class C3DHandler:
         return new_c3d
     
     def prepare_osim_files(self, fullpath: str):
+        """Export OpenSim-ready TRC and MOT files with the default transform.
+
+        Creates the output directory if needed, then rotates -90° about X,
+        converts to metres and writes ``<fullpath>.trc`` and ``<fullpath>.mot``.
+
+        Args:
+            fullpath: Output path without extension.
+        """
         if not os.path.isdir(os.path.dirname(fullpath)):
             os.makedirs(os.path.dirname(fullpath))
         self.process_and_export(fullpath=fullpath, axis='x', angle_deg=-90, convert_to_meters=True)
 
     def get_subject_weight(self) -> Optional[float]:
+        """Estimate subject weight from the loaded force plates.
+
+        Picks the plate that carries appreciable load (mean magnitude > 50) and
+        returns the median vertical force. The lab coordinate system is Z-up, so
+        the vertical force is taken from ``Fz``.
+
+        Returns:
+            The estimated weight in newtons, or ``None`` if no loaded plate is
+            found.
+        """
         for force_plate in self.forces.values():
             magnitudes = force_plate.get_force_magnitude()
             if np.mean(magnitudes) > 50:  # Arbitrary threshold to identify used forceplate

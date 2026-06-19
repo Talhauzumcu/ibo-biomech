@@ -1,3 +1,12 @@
+"""OpenSim tooling wrappers.
+
+This module defines :class:`OsimHandler`, thin wrappers around the OpenSim
+Python API for running Inverse Kinematics and model Scaling from setup files.
+
+Note:
+    These helpers require the optional ``opensim`` and ``pandas`` packages and
+    expect setup XML files under ``./setup_files/``.
+"""
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 import opensim as osim
@@ -6,12 +15,21 @@ import os
 import numpy as np
 
 class OsimHandler:
-    """Handler for running OpenSim tools like Inverse Kinematics and Scaling"""
+    """Run OpenSim tools such as Inverse Kinematics and Scaling."""
 
     @staticmethod
     def runIK(model_path: str, trc_path: str, mot_path: str, output: str, initial_time: float=None, final_time: float=None) -> None:
-        """Run inverse kinematics using OpenSim."""
-        
+        """Run Inverse Kinematics with OpenSim.
+
+        Args:
+            model_path: Path to the ``.osim`` model.
+            trc_path: Path to the marker TRC file.
+            mot_path: Path to the motion/forces MOT file.
+            output: Output motion file path for the IK results.
+            initial_time: Start time in seconds; defaults to the TRC start time.
+            final_time: End time in seconds; defaults to the TRC end time.
+        """
+
         if not os.path.exists(output):
             os.makedirs(os.path.dirname(output), exist_ok=True)
 
@@ -46,7 +64,16 @@ class OsimHandler:
 
     @staticmethod
     def runScaling(model_path: str, trc_path: str, output: str=None, mass: float=None) -> None:
-        """Run scaling using OpenSim."""
+        """Scale an OpenSim model to a static trial.
+
+        Args:
+            model_path: Path to the generic ``.osim`` model.
+            trc_path: Path to the static-pose marker TRC file.
+            output: Output path for the scaled model. Defaults to
+                ``<model>_scaled.osim``.
+            mass: Subject mass in kilograms used to scale segment masses; if
+                ``None`` the value from the setup file is kept.
+        """
         if output is None:
             output = os.path.splitext(model_path)[0] + "_scaled.osim"
         out_dir = os.path.dirname(output)

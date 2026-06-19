@@ -1,3 +1,10 @@
+"""Conversions between biomechanical file formats.
+
+This module defines :class:`FileConverter`, a stateless collection of static
+methods to convert between C3D, the lab's HDF5 format, and the OpenSim TRC/MOT
+formats. Conversions targeting OpenSim apply, by default, a -90° rotation about
+the X axis and convert positions to metres to match OpenSim's coordinate system.
+"""
 import h5py
 import numpy as np
 from ibo_biomech.utils.utils import *
@@ -5,11 +12,23 @@ from ibo_biomech.handlers import *
 from datetime import datetime, timezone
 
 class FileConverter:
-    """Stateless utility class to convert between biomechanical file formats."""
-    
+    """Stateless converters between biomechanical file formats.
+
+    All methods are static; no instance is required.
+    """
+
     @staticmethod
     def c3d_to_h5(c3d_path: str, h5_path: str) -> None:
-        """Converts a C3D file directly to the lab's HDF5 architecture."""
+        """Convert a C3D file to the lab's HDF5 format.
+
+        Builds the full HDF5 group structure (metadata, trajectories, analog,
+        force plates, ...) from the parsed C3D data. Fields that C3D does not
+        carry are filled with placeholder values to be edited later.
+
+        Args:
+            c3d_path: Path to the source C3D file.
+            h5_path: Destination path for the HDF5 file.
+        """
 
         handler = C3DHandler(c3d_path)
         handler.load_data()
@@ -150,8 +169,17 @@ class FileConverter:
         print(f"Successfully converted {c3d_path} to {h5_path}")
 
     @staticmethod
-    def h5_to_trc(h5_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Converts and h5 file to TRC format. Default values are set to convert from lab's h5 architecture to OpenSim TRC format."""
+    def h5_to_trc(h5_path: str, trc_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert an HDF5 file's markers to an OpenSim TRC file.
+
+        Args:
+            h5_path: Path to the source HDF5 file.
+            trc_path: Destination path for the TRC file.
+            axis: Axis to rotate markers about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert marker units to metres.
+                Defaults to ``True``.
+        """
         h5h = H5Handler(h5_path)
         trial = h5h.load_data()
         trial.rotate_markers(axis, angle)
@@ -174,16 +202,38 @@ class FileConverter:
 
 
     @staticmethod
-    def c3d_to_trc(c3d_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Convenience method to convert directly from c3d to trc."""
+    def c3d_to_trc(c3d_path: str, trc_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert a C3D file's markers directly to an OpenSim TRC file.
+
+        Goes through a temporary HDF5 file which is deleted afterwards.
+
+        Args:
+            c3d_path: Path to the source C3D file.
+            trc_path: Destination path for the TRC file.
+            axis: Axis to rotate markers about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert marker units to metres.
+                Defaults to ``True``.
+        """
         temp_h5_path = ".temp_conversion.h5"
         FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
         FileConverter.h5_to_trc(temp_h5_path, trc_path, axis, angle, convert_to_meters)
         os.remove(temp_h5_path)
 
     @staticmethod
-    def h5_to_mot(h5_path: str, mot_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Converts an h5 file to OpenSim MOT format. This will include only GRFs."""
+    def h5_to_mot(h5_path: str, mot_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert an HDF5 file's force plates to an OpenSim MOT file.
+
+        Only ground reaction forces (and moments/CoP) are written.
+
+        Args:
+            h5_path: Path to the source HDF5 file.
+            mot_path: Destination path for the MOT file.
+            axis: Axis to rotate forces about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert force-plate position units to
+                metres. Defaults to ``True``.
+        """
         h5h = H5Handler(h5_path)
         trial = h5h.load_data()
         trial.rotate_forces(axis, angle)
@@ -193,30 +243,55 @@ class FileConverter:
         write_mot(mot_path, trial.forces)
 
     @staticmethod
-    def h5_to_opensim(h5_path: str, mot_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Convenience method to convert an h5 file to OpenSim TRC and MOT formats."""
+    def h5_to_opensim(h5_path: str, mot_path: str, trc_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert an HDF5 file to both OpenSim TRC and MOT files.
+
+        Args:
+            h5_path: Path to the source HDF5 file.
+            mot_path: Destination path for the MOT (forces) file.
+            trc_path: Destination path for the TRC (markers) file.
+            axis: Axis to rotate data about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert units to metres. Defaults to
+                ``True``.
+        """
         FileConverter.h5_to_trc(h5_path, trc_path, axis, angle, convert_to_meters)
         FileConverter.h5_to_mot(h5_path, mot_path, axis, angle, convert_to_meters)
-
-    @staticmethod
-    def c3d_to_trc(c3d_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Convenience method to convert directly from c3d to trc."""
-        temp_h5_path = ".temp_conversion.h5"
-        FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
-        FileConverter.h5_to_trc(temp_h5_path, trc_path, axis, angle, convert_to_meters)
-        os.remove(temp_h5_path)
     
     @staticmethod
-    def c3d_to_mot(c3d_path: str, mot_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Convenience method to convert directly from c3d to mot."""
+    def c3d_to_mot(c3d_path: str, mot_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert a C3D file's force plates directly to an OpenSim MOT file.
+
+        Goes through a temporary HDF5 file which is deleted afterwards.
+
+        Args:
+            c3d_path: Path to the source C3D file.
+            mot_path: Destination path for the MOT file.
+            axis: Axis to rotate forces about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert position units to metres.
+                Defaults to ``True``.
+        """
         temp_h5_path = ".temp_conversion.h5"
         FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
         FileConverter.h5_to_mot(temp_h5_path, mot_path, axis, angle, convert_to_meters)
         os.remove(temp_h5_path)
         
     @staticmethod
-    def c3d_to_opensim(c3d_path: str, mot_path: str, trc_path: str, axis='x', angle=-90, convert_to_meters: bool = True) -> None:
-        """Convenience method to convert directly from c3d to OpenSim TRC and MOT formats."""
+    def c3d_to_opensim(c3d_path: str, mot_path: str, trc_path: str, axis: str = 'x', angle: float = -90, convert_to_meters: bool = True) -> None:
+        """Convert a C3D file directly to both OpenSim TRC and MOT files.
+
+        Goes through a temporary HDF5 file which is deleted afterwards.
+
+        Args:
+            c3d_path: Path to the source C3D file.
+            mot_path: Destination path for the MOT (forces) file.
+            trc_path: Destination path for the TRC (markers) file.
+            axis: Axis to rotate data about before export. Defaults to ``'x'``.
+            angle: Rotation angle in degrees. Defaults to ``-90``.
+            convert_to_meters: Whether to convert units to metres. Defaults to
+                ``True``.
+        """
         temp_h5_path = ".temp_conversion.h5"
         FileConverter.c3d_to_h5(c3d_path, temp_h5_path)
         FileConverter.h5_to_opensim(temp_h5_path, mot_path, trc_path, axis, angle, convert_to_meters)

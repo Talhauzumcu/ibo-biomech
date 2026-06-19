@@ -1,3 +1,9 @@
+"""Force plate data container.
+
+This module defines :class:`ForceData`, which holds the force, moment and
+centre-of-pressure signals of a single force plate together with helpers for
+filtering, cropping, rotating and unit conversion.
+"""
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -5,7 +11,31 @@ from ibo_biomech.utils.utils import *
 
 @dataclass
 class ForceData:
-    """Data class for force plate data."""
+    """Signals and geometry for a single force plate.
+
+    Most processing methods operate **in place**. Convenience properties
+    (:attr:`Fx`, :attr:`cop_x`, :attr:`Mx`, ...) expose individual rows of the
+    stacked arrays.
+
+    Attributes:
+        name: Force plate name (e.g. ``"forceplate_0"``).
+        force: Force components ``Fx, Fy, Fz``, shape ``(3, n_samples)``.
+        moment: Moment components ``Mx, My, Mz``, shape ``(3, n_samples)``.
+        cop: Centre of pressure ``x, y, z``, shape ``(3, n_samples)``.
+        location: Plate corner coordinates, shape ``(3, 4, n_samples)``.
+        position: Plate origin position, shape ``(3, n_samples)``.
+        rotation: Plate orientation matrices, shape ``(3, 3, n_samples)``.
+        offset: Origin offset relative to the corners, shape ``(3, 1)``.
+        Tz: Vertical free moment used for gait-event detection, shape
+            ``(n_samples,)``.
+        coordinateSystem: ``1`` if data is in global coordinates, ``0`` if local.
+        metadata: Raw plate metadata (units, calibration matrix, corners, ...).
+        sampling_rate: Sampling frequency in Hz. Required for filtering.
+        num_samples: Number of samples; derived in :meth:`__post_init__`.
+        unit_force: Force unit, derived from ``metadata``.
+        unit_moment: Moment unit, derived from ``metadata``.
+        unit_cop: Centre-of-pressure unit, derived from ``metadata``.
+    """
     name: str
     force: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Fx, Fy, Fz
     moment: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Mx, My, Mz
@@ -18,23 +48,30 @@ class ForceData:
     coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
-    
+
     def __post_init__(self):
+        """Clean NaNs, parse unit metadata and cache the sample count."""
         self.clean_nan()
         self._parse_metadata()
         self.num_samples = self.force.shape[1]
 
     def _parse_metadata(self) -> None:
+        """Populate ``unit_force``, ``unit_moment`` and ``unit_cop`` from metadata."""
         self.unit_force = self.metadata.get('unit_force', 'Unknown')
         self.unit_moment = self.metadata.get('unit_moment', 'Unknown')
         self.unit_cop = self.metadata.get('unit_position', 'Unknown')
-    
+
     def get_force_magnitude(self) -> np.ndarray:
-        """Returns magnitude of force vector."""
+        """Return the magnitude of the force vector per sample.
+
+        Returns:
+            Array of shape ``(n_samples,)`` (or ``(3,)`` depending on array
+            orientation) with the Euclidean norm of the force.
+        """
         return np.sqrt(np.sum(self.force**2, axis=1))
 
     def clean_nan(self) -> None:
-        """Replace NaN values in force, moment, and cop with zeros."""
+        """Replace NaN values in all signal and geometry arrays with zeros."""
         self.force = np.nan_to_num(self.force)
         self.moment = np.nan_to_num(self.moment)
         self.cop = np.nan_to_num(self.cop)
@@ -44,7 +81,15 @@ class ForceData:
         self.Tz = np.nan_to_num(self.Tz)
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
-        """Apply low-pass Butterworth filter to force, moment, and cop data."""
+        """Apply a zero-phase low-pass Butterworth filter to force, moment and CoP.
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+
+        Raises:
+            ValueError: If ``sampling_rate`` is not set.
+        """
         from scipy.signal import butter, filtfilt
         if self.sampling_rate is None:
             raise ValueError("Sampling rate must be set to apply low-pass filter.")
@@ -54,7 +99,15 @@ class ForceData:
         self.cop = filtfilt(b, a, self.cop, axis=1)
 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
-        """Apply high-pass Butterworth filter to force, moment, and cop data."""
+        """Apply a zero-phase high-pass Butterworth filter to force, moment and CoP.
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+
+        Raises:
+            ValueError: If ``sampling_rate`` is not set.
+        """
         from scipy.signal import butter, filtfilt
         if self.sampling_rate is None:
             raise ValueError("Sampling rate must be set to apply high-pass filter.")
@@ -64,7 +117,15 @@ class ForceData:
         self.cop = filtfilt(b, a, self.cop, axis=1)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
-        """Set forces below threshold to zero."""
+        """Zero out frames whose force magnitude is below a threshold.
+
+        Force, moment and CoP are set to zero wherever the force magnitude is
+        below ``threshold``, removing spurious readings during swing phases.
+
+        Args:
+            threshold: Force magnitude below which frames are zeroed, in newtons.
+                Defaults to 10.0.
+        """
         force_magnitude = self.get_force_magnitude()
         low_force_indices = force_magnitude < threshold
         self.force[low_force_indices] = 0
@@ -72,7 +133,13 @@ class ForceData:
         self.cop[low_force_indices] = 0
 
     def downsample(self, factor: int) -> None:
-        """Downsample force, moment, cop, and Tz data using scipy's decimate."""
+        """Downsample force, moment and CoP in place using FIR decimation.
+
+        Updates ``sampling_rate`` accordingly. Uses zero-phase decimation.
+
+        Args:
+            factor: Integer downsampling factor.
+        """
         from scipy.signal import decimate
         self.force = decimate(self.force, factor, axis=0, ftype='fir', zero_phase=True)
         self.moment = decimate(self.moment, factor, axis=0, ftype='fir', zero_phase=True)
@@ -81,7 +148,12 @@ class ForceData:
             self.sampling_rate /= factor
 
     def crop(self, start_idx: int, end_idx: int) -> None:
-        """Crop force, moment, cop, and Tz data to specified index range."""
+        """Crop all signal and geometry arrays to ``[start_idx, end_idx)``.
+
+        Args:
+            start_idx: First sample index to keep.
+            end_idx: First sample index to drop (exclusive).
+        """
         self.force = self.force[:, start_idx:end_idx]
         self.moment = self.moment[:, start_idx:end_idx]
         self.cop = self.cop[:, start_idx:end_idx]
@@ -89,7 +161,13 @@ class ForceData:
         self.position = self.position[:, start_idx:end_idx]
         self.rotation = self.rotation[:, :, start_idx:end_idx]
 
-    def rotate(self, axis, angle_deg) -> None:
+    def rotate(self, axis: str, angle_deg: float) -> None:
+        """Rotate force, moment, CoP, position and orientation about an axis.
+
+        Args:
+            axis: Axis to rotate about (``'x'``, ``'y'`` or ``'z'``).
+            angle_deg: Rotation angle in degrees.
+        """
         rotation_matrix = get_rotation_matrix(axis, angle_deg)
         self.force = rotation_matrix @ self.force
         self.moment = rotation_matrix @ self.moment
@@ -98,7 +176,18 @@ class ForceData:
         self.rotation = rotation_matrix @ self.rotation
 
     def convert_units(self, target_unit: str) -> None:
-        """Convert force units to target_unit (e.g. 'mm' to 'm'). Usually moments are in Nmm and COP is in mm"""
+        """Convert position-derived quantities to a target length unit in place.
+
+        Scales moment, CoP and ``Tz`` and updates the unit labels. Moments are
+        typically in ``N·mm`` and CoP in ``mm``. No-op if already in
+        ``target_unit``.
+
+        Args:
+            target_unit: Desired length unit (``'mm'`` or ``'m'``).
+
+        Raises:
+            ValueError: If the requested conversion is not supported.
+        """
         conversion_factors = {
             ('mm', 'm'): 0.001,
             ('m', 'mm'): 1000,
@@ -114,12 +203,12 @@ class ForceData:
         self.Tz *= factor
         self.unit_moment = f'N{target_unit}'
         self.unit_cop = target_unit
-        
+
     def plot(self) -> None:
-        """Plot force, moment, and cop data."""
+        """Plot force, moment and centre of pressure against time in three subplots."""
         import matplotlib.pyplot as plt
         time = np.arange(self.force.shape[1]) / self.sampling_rate if self.sampling_rate else np.arange(self.force.shape[1])
-        
+
         plt.figure(figsize=(12, 8))
         plt.subplot(3, 1, 1)
         plt.plot(time, self.force.T)
@@ -127,72 +216,85 @@ class ForceData:
         plt.xlabel('Time (s)')
         plt.ylabel(f'Force {self.metadata.get("unit_force", "N")}')
         plt.legend(['Fx', 'Fy', 'Fz'])
-        
+
         plt.subplot(3, 1, 2)
         plt.plot(time, self.moment.T)
         plt.title(f'{self.name} - Moment')
         plt.xlabel('Time (s)')
         plt.ylabel(f'Moment {self.metadata.get("unit_moment", "Nm")}')
         plt.legend(['Mx', 'My', 'Mz'])
-        
+
         plt.subplot(3, 1, 3)
         plt.plot(time, self.cop.T)
         plt.title(f'{self.name} - Center of Pressure')
         plt.xlabel('Time (s)')
         plt.ylabel(f'COP {self.metadata.get("unit_cop", "mm")}')
         plt.legend(['COPx', 'COPy', 'COPz'])
-        
+
         plt.tight_layout()
         plt.show()
 
     @property
     def Fx(self) -> np.ndarray:
+        """Force along the X axis, shape ``(n_samples,)``."""
         return self.force[0, :]
-    
+
     @property
     def Fy(self) -> np.ndarray:
+        """Force along the Y axis, shape ``(n_samples,)``."""
         return self.force[1, :]
-    
+
     @property
     def Fz(self) -> np.ndarray:
+        """Force along the Z axis, shape ``(n_samples,)``."""
         return self.force[2, :]
 
     @property
     def cop_x(self) -> np.ndarray:
+        """Centre of pressure along the X axis, shape ``(n_samples,)``."""
         return self.cop[0, :]
-    
+
     @property
     def cop_y(self) -> np.ndarray:
+        """Centre of pressure along the Y axis, shape ``(n_samples,)``."""
         return self.cop[1, :]
 
     @property
     def cop_z(self) -> np.ndarray:
+        """Centre of pressure along the Z axis, shape ``(n_samples,)``."""
         return self.cop[2, :]
-    
+
     @property
     def Mx(self) -> np.ndarray:
+        """Moment about the X axis, shape ``(n_samples,)``."""
         return self.moment[0, :]
-    
+
     @property
     def My(self) -> np.ndarray:
+        """Moment about the Y axis, shape ``(n_samples,)``."""
         return self.moment[1, :]
-    
+
     @property
     def Mz(self) -> np.ndarray:
+        """Moment about the Z axis, shape ``(n_samples,)``."""
         return self.moment[2, :]
-    
+
     @property
     def x(self) -> np.ndarray:
+        """Plate origin position along the X axis, shape ``(n_samples,)``."""
         return self.position[0, :]
-    
+
     @property
     def y(self) -> np.ndarray:
+        """Plate origin position along the Y axis, shape ``(n_samples,)``."""
         return self.position[1, :]
-    
+
     @property
     def z(self) -> np.ndarray:
+        """Plate origin position along the Z axis, shape ``(n_samples,)``."""
         return self.position[2, :]
-    
+
     @property
     def unit_position(self) -> str:
+        """Unit of the plate position data (alias of :attr:`unit_cop`)."""
         return self.unit_cop

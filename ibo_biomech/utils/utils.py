@@ -1,16 +1,23 @@
+"""Shared helper functions.
+
+Low-level utilities used across the library: building rotation matrices and
+writing OpenSim TRC and MOT files from container objects.
+"""
 import numpy as np
-import os 
+import os
 
 def get_rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
-    """
-    Create a 3x3 rotation matrix for rotation around a specified axis.
-    
+    """Build a 3x3 rotation matrix about a coordinate axis.
+
     Args:
-        axis: Axis to rotate around ('x', 'y', or 'z')
-        angle_deg: Rotation angle in degrees
-        
+        axis: Axis to rotate about (``'x'``, ``'y'`` or ``'z'``).
+        angle_deg: Rotation angle in degrees.
+
     Returns:
-        3x3 rotation matrix
+        The 3x3 rotation matrix.
+
+    Raises:
+        ValueError: If ``axis`` is not one of ``'x'``, ``'y'`` or ``'z'``.
     """
     angle_rad = np.radians(angle_deg)
     c = np.cos(angle_rad)
@@ -39,12 +46,16 @@ def get_rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
     
 
 def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> None:
-        """
-        Write marker data to a TRC file compatible with OpenSim.
-        
+        """Write marker data to an OpenSim-compatible TRC file.
+
         Args:
-            output_filepath: Path for the output TRC file
-            header_dict: Dictionary containing header information for the TRC file
+            output_filepath: Path for the output TRC file.
+            header_dict: TRC header values. Expected keys: ``data_rate``,
+                ``camera_rate``, ``num_frames``, ``num_markers``, ``units``,
+                ``orig_data_rate``, ``orig_data_start_frame``,
+                ``orig_num_frames`` and ``marker_labels``.
+            marker_data: Mapping of marker label to
+                :class:`~ibo_biomech.containers.MarkerData`.
         """
         data_rate = header_dict.get('data_rate')
         camera_rate = header_dict.get('camera_rate')
@@ -88,12 +99,18 @@ def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> Non
 
 
 def write_mot(output_filepath: str, forces: dict) -> None:
-        """
-        Write force plate data to a MOT file compatible with OpenSim.
-        
+        """Write force plate data to an OpenSim-compatible MOT file.
+
+        Writes nine columns per plate: force (vx, vy, vz), centre of pressure
+        (px, py, pz) and moment (mx, my, mz).
+
         Args:
-            output_filepath: Path for the output MOT file
-            forces - Dictionary of ForceData instances, keyed by force plate name
+            output_filepath: Path for the output MOT file.
+            forces: Mapping of plate name to
+                :class:`~ibo_biomech.containers.ForceData`.
+
+        Raises:
+            Exception: If ``forces`` is empty.
         """
         if not forces:
             raise Exception("No force data to write.")
