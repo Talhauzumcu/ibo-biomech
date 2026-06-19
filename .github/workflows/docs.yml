@@ -29,12 +29,12 @@ jobs:
         run: pip install -e .[docs]
 
       - name: Build site
-        run: mkdocs build --strict -d site
+        run: sphinx-build -b html docs docs/_build/html
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: docs/_build/html
 
   deploy:
     needs: build

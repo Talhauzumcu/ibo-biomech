@@ -21,7 +21,7 @@ classifiers = [
 dependencies = ["numpy", "h5py", "ezc3d", "scipy"]
 
 [project.optional-dependencies]
-docs = ["mkdocs-material", "mkdocstrings[python]"]
+docs = ["sphinx", "sphinx-rtd-theme", "myst-parser"]
 
 [project.urls]
 Homepage = "https://github.com/Talhauzumcu/ibo-biomech"

@@ -9,7 +9,7 @@ build/
 .venv/
 .env/
 Docs/
-site/
+docs/_build/
 
 # Data files
 *.c3d
