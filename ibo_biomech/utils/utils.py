@@ -3,8 +3,11 @@
 Low-level utilities used across the library: building rotation matrices and
 writing OpenSim TRC and MOT files from container objects.
 """
+
+from pathlib import Path
 import numpy as np
 import os
+
 
 def get_rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
     """Build a 3x3 rotation matrix about a coordinate axis.
@@ -168,3 +171,80 @@ def write_mot(output_filepath: str, forces: dict) -> None:
                 f.write(line + "\n")
         
         # print(f"MOT file written to: {output_filepath}")
+
+
+
+
+
+def build_extloads(r_idx, out_file, mot_file=None, h5_file=None):
+    """Inverse dynamics requires to read the mot file. If not provided it will have to be created here."""
+    if mot_file is None:
+        from ibo_biomech import FileConverter
+        mot_file = h5_file.replace('.h5', '.mot')
+        mot_file=FileConverter.h5_to_mot(h5_path=h5_file, mot_path=mot_file)
+    _EXTFORCE = """\t\t\t<ExternalForce name="{name}">
+    \t\t\t\t<applied_to_body>{body}</applied_to_body>
+    \t\t\t\t<force_expressed_in_body>ground</force_expressed_in_body>
+    \t\t\t\t<point_expressed_in_body>ground</point_expressed_in_body>
+    \t\t\t\t<force_identifier>ground_force_{idx}_v</force_identifier>
+    \t\t\t\t<point_identifier>ground_force_{idx}_p</point_identifier>
+    \t\t\t\t<torque_identifier>ground_moment_{idx}_m</torque_identifier>
+    \t\t\t\t<data_source_name>Unassigned</data_source_name>
+    \t\t\t</ExternalForce>"""
+
+    """Write an ExternalLoads xml pointing the right foot at its correct plate."""
+    l_idx = 2 if r_idx == 1 else 1
+    grf = mot_file
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8" ?>\n'
+        '<OpenSimDocument Version="40500">\n'
+        '\t<ExternalLoads name="externalloads">\n'
+        '\t\t<objects>\n'
+        + _EXTFORCE.format(name="rightfoot", body="calcn_r", idx=r_idx) + "\n"
+        + _EXTFORCE.format(name="leftfoot",  body="calcn_l", idx=l_idx) + "\n"
+        + '\t\t</objects>\n'
+        '\t\t<groups />\n'
+        f'\t\t<datafile>{grf}</datafile>\n'
+        '\t</ExternalLoads>\n'
+        '</OpenSimDocument>\n'
+    )
+    Path(out_file).write_text(xml, encoding="utf-8")
+    return out_file
+
+def read_storage(path):
+    lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
+    end = next(i for i, ln in enumerate(lines) if ln.strip().lower() == "endheader")
+    header = [h.strip() for h in lines[end + 1].split("\t")]
+    cols = {h: [] for h in header}
+    for ln in lines[end + 2:]:
+        if not ln.strip():
+            continue
+        for h, v in zip(header, ln.split("\t")):
+            cols[h].append(float(v))
+    return {h: np.asarray(v) for h, v in cols.items()}
+
+
+def read_trc(path):
+    """Return (time, marker_fn, marker_names). marker_fn(name) -> (n,3) X,Y,Z array."""
+    lines = Path(path).read_text(errors="replace").splitlines()
+    names = lines[3].split("\t")                      # Frame#, Time, then 3 cols/marker
+    start_col = {nm.strip(): i for i, nm in enumerate(names)
+                 if nm.strip() and nm.strip() not in ("Frame#", "Time")}
+    rows = []
+    for ln in lines[5:]:
+        if not ln.strip():
+            continue
+        parts = ln.split("\t")
+        try:
+            float(parts[0])
+        except ValueError:
+            continue
+        rows.append([float(x) if x.strip() not in ("", "nan", "NaN") else np.nan
+                     for x in parts])
+    D = np.array(rows)
+    t = D[:, 1]
+
+    def marker(nm):
+        c = start_col[nm]
+        return D[:, c:c + 3]
+    return t, marker, set(start_col)

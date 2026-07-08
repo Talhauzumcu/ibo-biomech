@@ -13,6 +13,7 @@ import opensim as osim
 import pandas as pd
 import os
 import numpy as np
+from ibo_biomech.utils.utils import read_storage
 
 class OsimHandler:
     """Run OpenSim tools such as Inverse Kinematics and Scaling."""
@@ -93,7 +94,7 @@ class OsimHandler:
             osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         if h5_file is not None:
             os.remove(trc_file)  # Clean up the temporary TRC file if it was created from HDF5
-            
+
     @staticmethod
     def run_scaling(model_path: str, 
                     setup_file: str,
@@ -151,6 +152,9 @@ class OsimHandler:
         initial_time = initial_time if initial_time is not None else markerData.getStartFrameTime()
         final_time = final_time if final_time is not None else markerData.getLastFrameTime()
 
+        if not os.path.exists(output_file):
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
+
         if log:
             log_file = (f'{output_file}.log')
             osim.Logger.removeFileSink()
@@ -187,6 +191,83 @@ class OsimHandler:
         return output_file
 
     @staticmethod
+    def run_id(model_path: str, 
+               setup_file: str,
+               mot_file: str,
+               external_loads_file: str=None,
+               output_file: str=None,
+               initial_time: float=None,
+               final_time: float=None,
+               lowpass_cutoff: float=-1.0,
+               log: bool=True
+               ) -> str:
+        """Run Inverse Dynamics with OpenSim. A model and a setup file are required to run id. 
+        If output, initial time or final time are provided, they will be used 
+        instead of the setup file values. lowpass_cutoff is used to filter the IK results before running ID.
+
+        Args:
+            model_path: Path to the ``.osim`` model.
+            setup_file: Path to the ID setup file.
+            mot_file: Path to the MOT file containing motion data (IK results).
+            external_loads_file: Path to the external loads XML file;
+            h5_file: Path to the HDF5 file containing trial data.
+            output_file: Output motion file path for the ID results.
+            initial_time: Start time in seconds; defaults to the TRC start time.
+            final_time: End time in seconds; defaults to the TRC end time.
+            lowpass_cutoff: Low-pass cutoff frequency for IK filtering; defaults to -1.0 (no filtering).
+            log: If True, a log file will be created for the ID process.
+        Returns:
+            Path to the output ID results file.
+        """
+
+        if model_path is None:
+            raise ValueError("a valid model_path must be provided.")
+
+        if setup_file is None:
+            raise ValueError("a valid setup_file must be provided.")
+
+        if external_loads_file is None:
+            raise ValueError("a valid external_loads_file must be provided.")
+        
+        model = osim.Model(str(model_path))
+        model.initSystem()
+        setup_file = Path(setup_file).resolve()
+
+        idTool = osim.InverseDynamicsTool(str(setup_file))
+        
+        #Get the variables from setup if not provided to the function
+        output_file = output_file if output_file else idTool.getOutputGenForceFileName()
+        mot_file = mot_file if mot_file else idTool.getCoordinatesFileName()
+        external_loads_file = external_loads_file if external_loads_file else idTool.getExternalLoadsFileName()
+        
+        if initial_time is None or final_time is None:
+            d = read_storage(mot_file)
+        initial_time = initial_time if initial_time is not None else float(d["time"][0])
+        final_time = final_time if final_time is not None else float(d["time"][-1])
+
+        if not os.path.exists(output_file):
+            Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
+
+        if log:
+            log_file = (f'{output_file}.log')
+            osim.Logger.removeFileSink()
+            osim.Logger.addFileSink(str(log_file))
+            osim.Logger.setLevelString("Info")
+
+        idTool.setModel(model)
+        idTool.setStartTime(initial_time)
+        idTool.setEndTime(final_time)
+        idTool.setCoordinatesFileName(str(mot_file))
+        idTool.setExternalLoadsFileName(str(external_loads_file))
+        idTool.setOutputGenForceFileName(str(Path(output_file).name))
+        idTool.setResultsDir(str(Path(output_file).parent))
+        idTool.setLowpassCutoffFrequency(lowpass_cutoff)
+        excl = osim.ArrayStr(); excl.append("Muscles")
+        idTool.setExcludedForces(excl)
+        idTool.run()
+        return output_file
+    
+    @staticmethod
     def _trc_from_h5(h5_file: str):
         """Convert an HDF5 file to a TRC file to use with OpenSim"""
 
@@ -194,3 +275,13 @@ class OsimHandler:
         trc_file = './._temp_trc.trc'
         FileConverter.h5_to_trc(h5_file, trc_file)
         return trc_file
+    
+    @staticmethod
+    def _mot_from_h5(h5_file: str):
+        """Convert an HDF5 file to a MOT file to use with OpenSim"""
+
+        from ibo_biomech import FileConverter
+        mot_file = './._temp_mot.mot'
+        FileConverter.h5_to_mot(h5_file, mot_file)
+        return mot_file
+    

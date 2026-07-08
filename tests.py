@@ -1,5 +1,6 @@
 #%%
 from ibo_biomech import C3DHandler, H5Handler, FileConverter
+from ibo_biomech.utils.utils import *
 #%%
 filename = '06_PRE_GANG_12_15.c3d'
 #%%
@@ -31,13 +32,17 @@ trialdata = h5h.load_data()
 #%%
 from ibo_biomech import C3DHandler, H5Handler, FileConverter
 from ibo_biomech.handlers.osimHandler import OsimHandler
+from ibo_biomech.utils.utils import *
 
 h5_file = 'test_output.h5'
-setup_file = 'example_scale_setup.xml'
+setup_file = 'example_ID_setup.xml'
 model = 'example_model.osim'
 trc_file = 'example_ref.trc'
 # %%
-OsimHandler.run_ik(model_path=model, setup_file=setup_file, trc_file=trc_file, output_file='test_output/test_output_OW_Ik.mot', initial_time=0, final_time=1)
+OsimHandler.run_ik(model_path=model, 
+                   setup_file='example_IK_setup.xml', 
+                   trc_file='test_output.trc', 
+                   output_file='test_output/test_output_IK.mot', initial_time=0, final_time=1)
 # %%
 OsimHandler.run_scaling(model_path=model, 
                         setup_file=setup_file, 
@@ -47,4 +52,16 @@ OsimHandler.run_scaling(model_path=model,
                         mass=70,
                         initial_time=0.5,
                         final_time=0.6)
+# %%
+external_forces_file = build_extloads(r_idx=1, out_file='test_output/test_output_external_loads.xml', h5_file=h5_file)
+
+# %%
+OsimHandler.run_id(model_path=model,
+                   setup_file=setup_file,
+                   mot_file='test_output/test_output_IK.mot',
+                   external_loads_file=external_forces_file,
+                   output_file='test_output/test_output_id.sto',
+                   initial_time=0,
+                   final_time=1)
+
 # %%

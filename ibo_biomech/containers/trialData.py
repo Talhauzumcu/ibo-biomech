@@ -273,6 +273,11 @@ class TrialData:
             The event time/index, or ``None`` if not found.
         """
         return self.events.get(name)
+    
+    def _get_right_foot_forceplate_index(self) -> int:
+        """Return the index of the force plate that right foot hits. It is used for automatic external loads file generation"""
+        ##TODO
+        pass        
 
     def __repr__(self) -> str:
         """Return a multi-line summary of the trial's contents."""
