@@ -32,11 +32,19 @@ trialdata = h5h.load_data()
 from ibo_biomech import C3DHandler, H5Handler, FileConverter
 from ibo_biomech.handlers.osimHandler import OsimHandler
 
-
 h5_file = 'test_output.h5'
-setup_file = 'example_IK_setup.xml'
+setup_file = 'example_scale_setup.xml'
 model = 'example_model.osim'
-trc_file = 'test_output.trc'
+trc_file = 'example_ref.trc'
 # %%
 OsimHandler.run_ik(model_path=model, setup_file=setup_file, trc_file=trc_file, output_file='test_output/test_output_OW_Ik.mot', initial_time=0, final_time=1)
+# %%
+OsimHandler.run_scaling(model_path=model, 
+                        setup_file=setup_file, 
+                        move_markers = True, 
+                        trc_file=trc_file, 
+                        output_file='test_output/test_output_scaled.osim', 
+                        mass=70,
+                        initial_time=0.5,
+                        final_time=0.6)
 # %%

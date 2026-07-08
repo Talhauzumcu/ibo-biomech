@@ -1,3 +1,4 @@
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #Check out the labeled residual formatting
 #unlabaled trajectories need to be handled
+#Add basic opensim pipeline tools (IK, ID, scaling) supported with h5

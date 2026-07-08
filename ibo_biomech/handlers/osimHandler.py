@@ -25,6 +25,7 @@ class OsimHandler:
                initial_time: float=None, 
                final_time: float=None,
                trc_file: str=None,
+               log: bool=True
                ) -> None:
         """Run Inverse Kinematics with OpenSim. A model and a setup file are 
         required to run ik. The function also accepts h5_file, which has 
@@ -72,10 +73,11 @@ class OsimHandler:
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
 
         # Setup logger
-        log_file = (f'{output_file}.log')
-        osim.Logger.removeFileSink()
-        osim.Logger.addFileSink(str(log_file))
-        osim.Logger.setLevelString("Info")
+        if log:
+            log_file = (f'{output_file}.log')
+            osim.Logger.removeFileSink()
+            osim.Logger.addFileSink(str(log_file))
+            osim.Logger.setLevelString("Info")
 
         print(f"Running IK with model: {model_path}, TRC: {trc_file}")
         ikTool.setModel(model)
@@ -87,60 +89,102 @@ class OsimHandler:
         ikTool.set_report_marker_locations(True)
         ikTool.run()
 
-        osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
+        if log:
+            osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         if h5_file is not None:
             os.remove(trc_file)  # Clean up the temporary TRC file if it was created from HDF5
+            
     @staticmethod
-    def run_scaling(model_path: str, trc_path: str, output: str=None, mass: float=None) -> None:
-        """Scale an OpenSim model to a static trial.
+    def run_scaling(model_path: str, 
+                    setup_file: str,
+                    trc_file: str,
+                    h5_file: str=None,
+                    mass: float=None,
+                    height: float=None,
+                    initial_time: float=None,
+                    final_time: float=None,
+                    move_markers: bool=None,
+                    output_file: str=None,
+                    log: bool=True 
+                    ) -> str:
+        """Scale an OpenSim model to a static trial. If provided optional parameters
+        override values from setup.xml
 
         Args:
             model_path: Path to the generic ``.osim`` model.
-            trc_path: Path to the static-pose marker TRC file.
-            output: Output path for the scaled model. Defaults to
-                ``<model>_scaled.osim``.
+            trc_file: Path to the static-pose marker TRC file.
+            h5_file: Path to the HDF5 file containing marker data.
             mass: Subject mass in kilograms used to scale segment masses; if
                 ``None`` the value from the setup file is kept.
+            height: Subject height in meters used to scale segment lengths; if
+                ``None`` the value from the setup file is kept.
+            initial_time: Start time in seconds; defaults to the TRC start time.
+            final_time: End time in seconds; defaults to the TRC end time.
+            move_markers: If True, markers will be moved to match the scaled model. Fixed markers on the model will not be moved even if 
+            the move markers is set to True.
+            output_file: Output path for the scaled model.
+            log: If True, a log file will be created for the scaling process.
+
+        Returns:
+            Path to the scaled model file.
         """
-        if output is None:
-            output = os.path.splitext(model_path)[0] + "_scaled.osim"
-        out_dir = os.path.dirname(output)
-        os.makedirs(out_dir, exist_ok=True)
+        if h5_file is not None:
+            trc_file = OsimHandler._trc_from_h5(h5_file) #Needs to be removed after use
+
+        if model_path is None:
+            raise ValueError("a valid model_path must be provided.")
+
+        if trc_file is None and h5_file is None:
+            raise ValueError("Either a trc_file or h5_file must be provided.")
         
-        print(f"Running Scaling with model: {model_path}, TRC: {trc_path}")
-        setup_file = Path('./setup_files/ScalingSetup.xml').resolve()
-        
-        #Need this because opensim is stupid.
+        if setup_file is None:
+            raise ValueError("a valid setup_file must be provided.")
+
+        print(f"Running Scaling with model: {model_path}, TRC: {trc_file}")
+        setup_file = Path(setup_file).resolve()
+        scalingTool = osim.ScaleTool(str(setup_file))
+        output_file = output_file if output_file is not None else scalingTool.getModelScaler().getOutputModelFileName()
+        mass = mass if mass is not None else scalingTool.getSubjectMass()
+        height = height if height is not None else scalingTool.getSubjectHeight()
+        markerData = osim.MarkerData(str(trc_file))
+        move_markers = move_markers if move_markers is not None else scalingTool.getMarkerPlacer().getApply()
+        initial_time = initial_time if initial_time is not None else markerData.getStartFrameTime()
+        final_time = final_time if final_time is not None else markerData.getLastFrameTime()
+
+        if log:
+            log_file = (f'{output_file}.log')
+            osim.Logger.removeFileSink()
+            osim.Logger.addFileSink(str(log_file))
+            osim.Logger.setLevelString("Info")
+
+        # #Need this because opensim is stupid.
         setup_dir = setup_file.parent
         rel_model_path = os.path.relpath(model_path, setup_dir)
-        rel_trc_path = os.path.relpath(trc_path, setup_dir)
-        rel_output_path = os.path.relpath(output, setup_dir)
-        
-        # 1. Get start and end times (Using the absolute path here is fine since MarkerData 
-        # doesn't suffer from the XML document directory bug)
-        markerData = osim.MarkerData(str(trc_path))
-        initial_time = markerData.getStartFrameTime()
-        final_time = markerData.getLastFrameTime()
-        
+        rel_trc_path = os.path.relpath(trc_file, setup_dir)
+        rel_output_path = os.path.relpath(output_file, setup_dir)
+                
         time_range = osim.ArrayDouble()
         time_range.append(initial_time)
         time_range.append(final_time)
         
-        scalingTool = osim.ScaleTool(str(setup_file))
         scalingTool.getGenericModelMaker().setModelFileName(rel_model_path)
-        if mass is not None:
-            scalingTool.setSubjectMass(mass)
 
         modelScaler = scalingTool.getModelScaler()
         modelScaler.setMarkerFileName(rel_trc_path)
         modelScaler.setTimeRange(time_range)
+        modelScaler.setOutputModelFileName(rel_output_path) 
 
         markerPlacer = scalingTool.getMarkerPlacer()
+        markerPlacer.setApply(move_markers)
         markerPlacer.setStaticPoseFileName(rel_trc_path)
         markerPlacer.setTimeRange(time_range)
         markerPlacer.setOutputModelFileName(rel_output_path) 
-        
+
         scalingTool.run()
+
+        if log:
+            osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
+        return output_file
 
     @staticmethod
     def _trc_from_h5(h5_file: str):
