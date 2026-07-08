@@ -5,6 +5,7 @@ file handlers. It groups all markers, analog channels, force plates and EMG
 signals of a single trial and offers trial-wide processing helpers.
 """
 import numpy as np
+import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from .forceData import ForceData

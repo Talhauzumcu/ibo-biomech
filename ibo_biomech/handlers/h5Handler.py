@@ -98,8 +98,7 @@ class H5Handler:
         Args:
             trial:    The TrialData object whose data should be written.
             out_path: Destination path for the new HDF5 file.  May be the same
-                      as self.h5_path to overwrite in-place (the copy is done
-                      before any writes, so the original is safe).
+                      as self.h5_path to overwrite in-place.
         """
 
         shutil.copy2(self.h5_path, out_path)

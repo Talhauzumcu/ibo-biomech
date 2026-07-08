@@ -10,9 +10,12 @@ build/
 .env/
 Docs/
 docs/_build/
+test_output/
 
 # Data files
 *.c3d
 *.h5
 *.trc
 *.mot
+*.osim
+*.xml
