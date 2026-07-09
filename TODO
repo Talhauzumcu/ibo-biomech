@@ -1,4 +1,6 @@
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #Check out the labeled residual formatting
 #unlabaled trajectories need to be handled
-#Add basic opensim pipeline tools (IK, ID, scaling) supported with h5
+#New EMG container needs integration with h5
+#Create new containers for opensim results.
+#opensim result supports for h5 files

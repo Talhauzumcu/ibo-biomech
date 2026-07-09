@@ -33,7 +33,7 @@ class TrialData:
         marker_rate: Marker sampling rate in Hz (set in ``__post_init__``).
         analog_rate: Analog sampling rate in Hz (set in ``__post_init__``).
     """
-    name: str
+    name: str = "Unknown"
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)

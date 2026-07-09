@@ -26,7 +26,7 @@ class OsimHandler:
                initial_time: float=None, 
                final_time: float=None,
                trc_file: str=None,
-               log: bool=True
+               log_file: str=None
                ) -> None:
         """Run Inverse Kinematics with OpenSim. A model and a setup file are 
         required to run ik. The function also accepts h5_file, which has 
@@ -41,6 +41,7 @@ class OsimHandler:
             setup_file: Path to the IK setup file.
             initial_time: Start time in seconds; defaults to the TRC start time.
             final_time: End time in seconds; defaults to the TRC end time.
+            log_file: Path to the log file for the IK process.
         """
 
         if h5_file is not None:
@@ -63,6 +64,7 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else ikTool.getOutputMotionFileName()
+        log_file = log_file if log_file else output_file.replace('.mot', '.log')
         trc_file = trc_file if trc_file else ikTool.getMarkerDataFileName()
         markerData = osim.MarkerData(str(trc_file))
         if initial_time is None:
@@ -74,11 +76,9 @@ class OsimHandler:
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
 
         # Setup logger
-        if log:
-            log_file = (f'{output_file}.log')
-            osim.Logger.removeFileSink()
-            osim.Logger.addFileSink(str(log_file))
-            osim.Logger.setLevelString("Info")
+        osim.Logger.removeFileSink()
+        osim.Logger.addFileSink(str(log_file))
+        osim.Logger.setLevelString("Info")
 
         print(f"Running IK with model: {model_path}, TRC: {trc_file}")
         ikTool.setModel(model)
@@ -90,7 +90,7 @@ class OsimHandler:
         ikTool.set_report_marker_locations(True)
         ikTool.run()
 
-        if log:
+        if log_file:
             osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         if h5_file is not None:
             os.remove(trc_file)  # Clean up the temporary TRC file if it was created from HDF5
@@ -106,7 +106,7 @@ class OsimHandler:
                     final_time: float=None,
                     move_markers: bool=None,
                     output_file: str=None,
-                    log: bool=True 
+                    log_file: str=None
                     ) -> str:
         """Scale an OpenSim model to a static trial. If provided optional parameters
         override values from setup.xml
@@ -124,7 +124,7 @@ class OsimHandler:
             move_markers: If True, markers will be moved to match the scaled model. Fixed markers on the model will not be moved even if 
             the move markers is set to True.
             output_file: Output path for the scaled model.
-            log: If True, a log file will be created for the scaling process.
+            log_file: Path to the log file for the scaling process.
 
         Returns:
             Path to the scaled model file.
@@ -145,6 +145,7 @@ class OsimHandler:
         setup_file = Path(setup_file).resolve()
         scalingTool = osim.ScaleTool(str(setup_file))
         output_file = output_file if output_file is not None else scalingTool.getModelScaler().getOutputModelFileName()
+        log_file = log_file if log_file is not None else output_file.replace('.osim', '.log')
         mass = mass if mass is not None else scalingTool.getSubjectMass()
         height = height if height is not None else scalingTool.getSubjectHeight()
         markerData = osim.MarkerData(str(trc_file))
@@ -155,11 +156,10 @@ class OsimHandler:
         if not os.path.exists(output_file):
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
 
-        if log:
-            log_file = (f'{output_file}.log')
-            osim.Logger.removeFileSink()
-            osim.Logger.addFileSink(str(log_file))
-            osim.Logger.setLevelString("Info")
+        #Setup Logger
+        osim.Logger.removeFileSink()
+        osim.Logger.addFileSink(str(log_file))
+        osim.Logger.setLevelString("Info")
 
         # #Need this because opensim is stupid.
         setup_dir = setup_file.parent
@@ -186,8 +186,7 @@ class OsimHandler:
 
         scalingTool.run()
 
-        if log:
-            osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
+        osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         return output_file
 
     @staticmethod
@@ -199,7 +198,7 @@ class OsimHandler:
                initial_time: float=None,
                final_time: float=None,
                lowpass_cutoff: float=-1.0,
-               log: bool=True
+               log_file: str=None
                ) -> str:
         """Run Inverse Dynamics with OpenSim. A model and a setup file are required to run id. 
         If output, initial time or final time are provided, they will be used 
@@ -215,7 +214,7 @@ class OsimHandler:
             initial_time: Start time in seconds; defaults to the TRC start time.
             final_time: End time in seconds; defaults to the TRC end time.
             lowpass_cutoff: Low-pass cutoff frequency for IK filtering; defaults to -1.0 (no filtering).
-            log: If True, a log file will be created for the ID process.
+            log_file: Path to the log file for the ID process.
         Returns:
             Path to the output ID results file.
         """
@@ -237,6 +236,7 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else idTool.getOutputGenForceFileName()
+        log_file = log_file if log_file else output_file.replace('.sto', '.log')
         mot_file = mot_file if mot_file else idTool.getCoordinatesFileName()
         external_loads_file = external_loads_file if external_loads_file else idTool.getExternalLoadsFileName()
         
@@ -248,11 +248,9 @@ class OsimHandler:
         if not os.path.exists(output_file):
             Path(output_file).parent.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists   
 
-        if log:
-            log_file = (f'{output_file}.log')
-            osim.Logger.removeFileSink()
-            osim.Logger.addFileSink(str(log_file))
-            osim.Logger.setLevelString("Info")
+        osim.Logger.removeFileSink()
+        osim.Logger.addFileSink(str(log_file))
+        osim.Logger.setLevelString("Info")
 
         idTool.setModel(model)
         idTool.setStartTime(initial_time)
@@ -265,6 +263,8 @@ class OsimHandler:
         excl = osim.ArrayStr(); excl.append("Muscles")
         idTool.setExcludedForces(excl)
         idTool.run()
+
+        osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         return output_file
     
     @staticmethod

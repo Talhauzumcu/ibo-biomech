@@ -54,7 +54,7 @@ class ForceData:
         self.clean_nan()
         self._parse_metadata()
         self.num_samples = self.force.shape[1]
-        assert self.forces.shape[0] == 3, "Force array must have shape (3, n_samples)"
+        assert self.force.shape[0] == 3, "Force array must have shape (3, n_samples)"
 
     def _parse_metadata(self) -> None:
         """Populate ``unit_force``, ``unit_moment`` and ``unit_cop`` from metadata."""
