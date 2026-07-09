@@ -8,20 +8,34 @@ OsimHandler
 
 .. code-block:: python
 
+
+   #### EXAMPLE USAGE ####
    from ibo_biomech.osimHandler import OsimHandler
+   #Setup files are still necessary. Since it is easier to use the OpenSim GUI to create tracking weights and markerSets.
 
    OsimHandler.run_ik(model_path=model, 
                    setup_file='example_IK_setup.xml', 
-                   trc_file='test_output.trc', 
+                   trc_file='test_data.h5', 
                    output_file='test_output/test_output_IK.mot', 
                    initial_time=0, 
                    final_time=1,
                    log_file='IK_logs.log')
 
+   #Same anaylsis can be run directly with an h5 file without trc conversion
+   OsimHandler.run_ik(model_path=model, 
+                   setup_file='example_IK_setup.xml', 
+                   h5_file='test_output.h5', 
+                   output_file='test_output/test_output_IK.mot', 
+                   initial_time=0, 
+                   final_time=1,
+                   log_file='IK_logs.log')
+   
+   #Scaling also supports both trc and h5 files. 
+   #Any of the optional parameters (mass, height etc) will be pulled from the setup file if they are not provided as an argument. 
    OsimHandler.run_scaling(model_path=model, 
                         setup_file='example_scale_setup.xml', 
                         move_markers = True, 
-                        trc_file=trc_file, 
+                        h5_file=h5_file, 
                         output_file='test_output/test_output_scaled.osim', 
                         mass=70,
                         initial_time=0.5,

@@ -3,6 +3,11 @@
 This module defines :class:`OsimHandler`, wrappers around the OpenSim
 Python API for running Inverse Kinematics, Scaling and Inverse Dynamics.
 
+Note:
+    - Currently Initial and Final times are not checked from the setup files.
+    They have to be either provided in the function call or will be pulled from the 
+    marker data or IK data (Starting from first frame and ending at last frame)
+
 """
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
