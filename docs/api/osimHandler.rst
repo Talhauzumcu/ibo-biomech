@@ -15,7 +15,7 @@ OsimHandler
 
    OsimHandler.run_ik(model_path=model, 
                    setup_file='example_IK_setup.xml', 
-                   trc_file='test_data.h5', 
+                   trc_file='test_data.trc', 
                    output_file='test_output/test_output_IK.mot', 
                    initial_time=0, 
                    final_time=1,
@@ -51,7 +51,7 @@ OsimHandler
 
    #If you don't have an external forces file, there is a utility for easier creation
    from ibo_biomech.utils import utils
-   ext_loads = utils.build_extloads(r_idx=1, 
+   ext_loads = utils.build_extloads(r_idx=1,  #Which forceplate to use for right leg. left leg is automatically assigned.
                                     output_file='test_output/test_output_external_loads.xml', 
                                     h5_file=h5_file)
    #Which returns the output file path so you can just use it in the run id directly
