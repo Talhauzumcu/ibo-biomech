@@ -7,6 +7,7 @@
 
 api/c3dhandler
 api/h5handler
+api/osimHandler
 ```
 
 ```{toctree}
@@ -28,3 +29,9 @@ api/subject
 api/fileconverter
 api/utils
 ```
+
+'''{toctree}
+:caption: Examples
+:hidden:
+api/testmarkdown.md
+'''
