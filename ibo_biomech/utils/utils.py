@@ -176,7 +176,7 @@ def write_mot(output_filepath: str, forces: dict) -> None:
 
 
 
-def build_extloads(r_idx, out_file, mot_file=None, h5_file=None):
+def build_extloads(r_idx, output_file, mot_file=None, h5_file=None):
     """Inverse dynamics requires to read the mot file. If not provided it will have to be created here."""
     if mot_file is None:
         from ibo_biomech import FileConverter
@@ -208,8 +208,8 @@ def build_extloads(r_idx, out_file, mot_file=None, h5_file=None):
         '\t</ExternalLoads>\n'
         '</OpenSimDocument>\n'
     )
-    Path(out_file).write_text(xml, encoding="utf-8")
-    return out_file
+    Path(output_file).write_text(xml, encoding="utf-8")
+    return output_file
 
 def read_storage(path):
     lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()

@@ -53,7 +53,7 @@ OsimHandler.run_scaling(model_path=model,
                         initial_time=0.5,
                         final_time=0.6)
 # %%
-external_forces_file = build_extloads(r_idx=1, out_file='test_output/test_output_external_loads.xml', h5_file=h5_file)
+external_forces_file = build_extloads(r_idx=1, output_file='test_output/test_output_external_loads.xml', h5_file=h5_file)
 
 # %%
 OsimHandler.run_id(model_path=model,

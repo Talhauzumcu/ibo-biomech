@@ -1,11 +1,8 @@
 """OpenSim tooling wrappers.
 
-This module defines :class:`OsimHandler`, thin wrappers around the OpenSim
-Python API for running Inverse Kinematics and model Scaling from setup files.
+This module defines :class:`OsimHandler`, wrappers around the OpenSim
+Python API for running Inverse Kinematics, Scaling and Inverse Dynamics.
 
-Note:
-    These helpers require the optional ``opensim`` and ``pandas`` packages and
-    expect setup XML files under ``./setup_files/``.
 """
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
