@@ -29,9 +29,3 @@ api/subject
 api/fileconverter
 api/utils
 ```
-
-'''{toctree}
-:caption: Examples
-:hidden:
-api/testmarkdown.md
-'''
