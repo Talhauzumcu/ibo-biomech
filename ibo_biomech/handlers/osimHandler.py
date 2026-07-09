@@ -10,9 +10,7 @@ Note:
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 import opensim as osim
-import pandas as pd
 import os
-import numpy as np
 from ibo_biomech.utils.utils import read_storage
 
 class OsimHandler:
