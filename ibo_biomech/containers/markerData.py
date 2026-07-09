@@ -227,3 +227,7 @@ class MarkerData:
                 virtual=1
             )
         return NotImplemented
+
+    def __repr__(self) -> str:
+        """Return a multi-line summary of the marker's contents."""
+        return f"MarkerData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit={self.unit}\n{'-'*50}\nsampling_rate={self.sampling_rate}\n{'-'*50}\nvirtual={self.virtual}\n{'-'*50}\nx={self.x}\n{'-'*50}\ny={self.y}\n{'-'*50}\nz={self.z}"

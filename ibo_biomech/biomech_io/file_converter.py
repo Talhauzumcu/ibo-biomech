@@ -20,7 +20,9 @@ class FileConverter:
     """
 
     @staticmethod
-    def c3d_to_h5(c3d_path: str, h5_path: str) -> str:
+    def c3d_to_h5(c3d_path: str, 
+                  h5_path: str, 
+                  **metadata) -> str:
         """Convert a C3D file to the lab's HDF5 format.
 
         Builds the full HDF5 group structure (metadata, trajectories, analog,
@@ -30,6 +32,10 @@ class FileConverter:
         Args:
             c3d_path: Path to the source C3D file.
             h5_path: Destination path for the HDF5 file.
+            metadata: Optional metadata fields to include in the HDF5 file. 
+            Keys can include ``project``, ``project_pi``, ``subject_id``, 
+            ``condition``, ``body_mass``, ``body_height``, ``sex``, and ``age``. 
+            Any missing fields will be filled with ``"Unknown"``.
         Returns:
             The path to the created HDF5 file.
         """
@@ -77,14 +83,14 @@ class FileConverter:
             meta_group = h5f.create_group("MetaData")
             meta_group.attrs["PathFile"] = c3d_path
             meta_group.attrs["OriginalFiles"] = [c3d_path]
-            meta_group.attrs["Project"] = "Unknown"
-            meta_group.attrs["ProjectPI"] = "Unknown"
-            meta_group.attrs["SubjectID"] = "Unknown"
-            meta_group.attrs["Condition"] = "Unknown"
-            meta_group.attrs["BodyMass"] = "Unknown"
-            meta_group.attrs["BodyHeight"] = "Unknown"
-            meta_group.attrs["Sex"] = "Unknown"
-            meta_group.attrs["Age"] = "Unknown"
+            meta_group.attrs["Project"] = metadata.get("project", "Unknown")
+            meta_group.attrs["ProjectPI"] = metadata.get("project_pi", "Unknown")
+            meta_group.attrs["SubjectID"] = metadata.get("subject_id", "Unknown")
+            meta_group.attrs["Condition"] = metadata.get("condition", "Unknown")
+            meta_group.attrs["BodyMass"] = metadata.get("body_mass", "Unknown")
+            meta_group.attrs["BodyHeight"] = metadata.get("body_height", "Unknown")
+            meta_group.attrs["Sex"] = metadata.get("sex", "Unknown")
+            meta_group.attrs["Age"] = metadata.get("age", "Unknown")
             meta_group.attrs["FileCreationLocal"] = str(datetime.now())
             meta_group.attrs["FileCreationUTC"] = str(datetime.now(timezone.utc))
             meta_group.attrs["LastUpdate"] = str(datetime.now())
@@ -133,7 +139,7 @@ class FileConverter:
                 plate_group.attrs['origin'] = fp_data.metadata.get("origin") if fp_data.metadata else 0.0
                 plate_group.attrs['Name'] = name
                 numSamples = fp_data.force.shape[0]
-                plate_group.attrs['NumSamples'] = num_samples
+                plate_group.attrs['NumSamples'] = numSamples
                 plate_group.attrs['SamplingFrequency'] = fp_data.sampling_rate
 
                 fp_sampling_factor = None

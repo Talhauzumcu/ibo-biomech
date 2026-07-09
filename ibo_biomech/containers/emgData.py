@@ -52,7 +52,7 @@ class EMGData:
             The processed, peak-normalised EMG envelope, shape ``(n_samples,)``.
         """
         self.clean_nan()
-        filtered_signal = self.highpass_filter(cutoff=30, order=2)
+        filtered_signal = self._highpass_filter(cutoff=30, order=2)
         rectified_signal = np.power(filtered_signal, 2)
         enveloped_signal = self._envelope_signal(rectified_signal, cutoff=10, order=2)
         normalized_signal = self._normalize_emg(enveloped_signal)
@@ -79,14 +79,11 @@ class EMGData:
         return filtfilt(b, a, signal, axis=0)
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
-        """Return a zero-phase low-pass Butterworth filtered copy of the signal.
+        """Lowpass filter the EMG data in place. 
 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
-        Returns:
-            The filtered signal (the container's ``data`` is left unchanged).
 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
@@ -95,9 +92,25 @@ class EMGData:
         if self.sampling_rate is None:
             raise ValueError("Sampling rate must be set to apply low-pass filter.")
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        return filtfilt(b, a, self.data, axis=0)
+        self.data = filtfilt(b, a, self.data, axis=0)
 
     def highpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
+        """highpass filter the EMG data in place. 
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+
+        Raises:
+            ValueError: If ``sampling_rate`` is not set.
+        """
+        from scipy.signal import butter, filtfilt
+        if self.sampling_rate is None:
+            raise ValueError("Sampling rate must be set to apply high-pass filter.")
+        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
+        self.data = filtfilt(b, a, self.data, axis=0)
+
+    def _highpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
         """Return a zero-phase high-pass Butterworth filtered copy of the signal.
 
         Args:
@@ -169,3 +182,9 @@ class EMGData:
         if not hasattr(self, '_processed_data'):
             self._processed_data = self.process_emg()
         return self._processed_data
+
+    def __repr__(self) -> str:
+        """Return a multi-line summary of the EMG channel's contents."""
+        return (f"EMGData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit={self.unit}\n"
+                f"{'-'*50}\nsampling_rate={self.sampling_rate}\n{'-'*50}\nchannel={self.channel}\n"
+                f"{'-'*50}\ndata_shape={self.data.shape}\n{'-'*50}")

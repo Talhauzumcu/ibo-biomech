@@ -57,7 +57,7 @@ class H5Handler:
             metadata = dict(h5f["MetaData"].attrs)
 
         return TrialData(
-            trial_name=self.trial_name,
+            name=self.trial_name,
             markers=markers,
             analogs=analogs,
             forces=forces,
@@ -86,7 +86,7 @@ class H5Handler:
         subject.add_trial(trial_name=trial_data.trial_name, trial_data=trial_data)
         return subject
 
-    def save_data(self, trial: TrialData, out_path: str) -> None:
+    def save_data(self, trial: TrialData, out_path: str) -> str:
         """Save a (processed) TrialData back to the lab HDF5 format.
 
         The original file is used as a template: all groups and attributes are
@@ -99,6 +99,8 @@ class H5Handler:
             trial:    The TrialData object whose data should be written.
             out_path: Destination path for the new HDF5 file.  May be the same
                       as self.h5_path to overwrite in-place.
+        Returns:
+            The path to the saved file (out_path).
         """
 
         shutil.copy2(self.h5_path, out_path)
@@ -110,7 +112,8 @@ class H5Handler:
             h5f["MetaData"].attrs["LastUpdate"] = str(datetime.now())
 
         print(f"Saved processed trial to {out_path}")
-
+        return out_path
+    
     def _save_markers(self, h5f: h5py.File, trial: TrialData) -> None:
         """Overwrite labeled trajectory datasets from trial.markers."""
         labeled = h5f["Trajectories/Labeled"]

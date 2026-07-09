@@ -22,7 +22,7 @@ class TrialData:
     filtering, rotating and unit conversion all operate **in place**.
 
     Attributes:
-        trial_name: Name of the trial.
+        name: Name of the trial.
         markers: Mapping of marker label to :class:`MarkerData`.
         analogs: Mapping of channel label to :class:`AnalogData`.
         forces: Mapping of plate name to :class:`ForceData`.
@@ -33,7 +33,7 @@ class TrialData:
         marker_rate: Marker sampling rate in Hz (set in ``__post_init__``).
         analog_rate: Analog sampling rate in Hz (set in ``__post_init__``).
     """
-    trial_name: str
+    name: str
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
@@ -262,17 +262,6 @@ class TrialData:
             The matching :class:`ForceData`, or ``None`` if not found.
         """
         return self.forces.get(name)
-
-    def get_event(self, name: str) -> Optional[int]:
-        """Look up a trial event time by name.
-
-        Args:
-            name: Event name.
-
-        Returns:
-            The event time/index, or ``None`` if not found.
-        """
-        return self.events.get(name)
     
     def _get_right_foot_forceplate_index(self) -> int:
         """Return the index of the force plate that right foot hits. It is used for automatic external loads file generation"""
@@ -281,4 +270,4 @@ class TrialData:
 
     def __repr__(self) -> str:
         """Return a multi-line summary of the trial's contents."""
-        return f"TrialData \n {'-'*50}\n trial_name={self.trial_name}\n{'-'*50}\nmetadata={self.metadata}\n{'-'*50}\nmarkers={list(self.markers.keys())}\n {'-'*50}\nanalogs={list(self.analogs.keys())}\n{'-'*50}\nforces={list(self.forces.keys())})"
+        return f"TrialData \n {'-'*50}\n name={self.name}\n{'-'*50}\nmetadata={self.metadata}\n{'-'*50}\nmarkers={list(self.markers.keys())}\n {'-'*50}\nanalogs={list(self.analogs.keys())}\n{'-'*50}\nforces={list(self.forces.keys())})"

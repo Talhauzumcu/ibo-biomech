@@ -54,6 +54,7 @@ class ForceData:
         self.clean_nan()
         self._parse_metadata()
         self.num_samples = self.force.shape[1]
+        assert self.forces.shape[0] == 3, "Force array must have shape (3, n_samples)"
 
     def _parse_metadata(self) -> None:
         """Populate ``unit_force``, ``unit_moment`` and ``unit_cop`` from metadata."""
@@ -65,10 +66,9 @@ class ForceData:
         """Return the magnitude of the force vector per sample.
 
         Returns:
-            Array of shape ``(n_samples,)`` (or ``(3,)`` depending on array
-            orientation) with the Euclidean norm of the force.
+            Array of shape ``(n_samples,)`` with the Euclidean norm of the force vector at each time point.
         """
-        return np.sqrt(np.sum(self.force**2, axis=1))
+        return np.sqrt(np.sum(self.force**2, axis=0))
 
     def clean_nan(self) -> None:
         """Replace NaN values in all signal and geometry arrays with zeros."""
@@ -298,3 +298,9 @@ class ForceData:
     def unit_position(self) -> str:
         """Unit of the plate position data (alias of :attr:`unit_cop`)."""
         return self.unit_cop
+
+    def __repr__(self) -> str:
+        """Return a multi-line summary of the force plate's contents."""
+        return (f"ForceData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit_force={self.unit_force}\n"
+                f"{'-'*50}\nunit_moment={self.unit_moment}\n{'-'*50}\nunit_cop={self.unit_cop}\n{'-'*50}\nsampling_rate={self.sampling_rate}\n"
+                f"{'-'*50}\nnum_samples={self.num_samples}\n{'-'*50}")
