@@ -1,0 +1,1 @@
+from .gaitAnalyzer import GaitAnalyzer

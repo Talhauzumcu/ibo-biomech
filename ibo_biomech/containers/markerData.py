@@ -162,6 +162,11 @@ class MarkerData:
         plt.legend(['X', 'Y', 'Z'])
         plt.show()
 
+    @property
+    def data(self) -> np.ndarray:
+        """Return the trajectory as a single array of shape ``(3, n_samples)``."""
+        return self.get_trajectory()
+    
     def __add__(self, other: MarkerData) -> MarkerData:
         """Add two markers element-wise, returning a new virtual marker.
 

@@ -1,6 +1,7 @@
+
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #Check out the labeled residual formatting
 #unlabaled trajectories need to be handled
-#New EMG container needs integration with h5
 #Create new containers for opensim results.
 #opensim result supports for h5 files
+#Add methods such as add_force, add_emg etc similar to how add_marker works.

@@ -1,8 +1,8 @@
 #%%
-from ibo_biomech import C3DHandler, H5Handler, FileConverter
+from ibo_biomech import C3DHandler, H5Handler, FileConverter, GaitAnalyzer
 from ibo_biomech.utils.utils import *
 #%%
-filename = Path('P01_pre_gait_17_0015.c3d')
+filename = Path('06_PRE_GANG_12_15.c3d')
 folder = Path('example_data')
 #%%
 c3dh = C3DHandler(str(folder / filename))
@@ -20,8 +20,18 @@ FileConverter.h5_to_opensim('test_output.h5', 'test_output.mot', 'test_output.tr
 #%%
 FileConverter.c3d_to_opensim(filename, 'test_output_direct.mot', 'test_output_direct.trc')
 #%%
-h5h = H5Handler('test_output_with_emg.h5')
-trialdata_h5 = h5h.load_data()
+h5h = H5Handler('test_output.h5')
+trialdata = h5h.load_data()
+
+#%%
+bodyweight = 879
+marker_re = 'R_ToesTop'
+marker_li = 'L_ToesTop'
+GaitAnalyzer.get_plate_contacts(bodyweight=bodyweight, 
+                                trialdata=trialdata, 
+                                marker_re=marker_re, 
+                                marker_li=marker_li,
+                                threshold_multiplier=1)
 # print(trialdata)
 # trialdata.forces['forceplate_0'].plot()
 # trialdata.forces['forceplate_0'].lowpass_filter(5)
