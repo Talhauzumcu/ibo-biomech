@@ -20,7 +20,7 @@ FileConverter.h5_to_opensim('test_output.h5', 'test_output.mot', 'test_output.tr
 #%%
 FileConverter.c3d_to_opensim(filename, 'test_output_direct.mot', 'test_output_direct.trc')
 #%%
-h5h = H5Handler('test_output.h5')
+h5h = H5Handler('test_output_w_IK.h5')
 trialdata = h5h.load_data()
 
 #%%
@@ -38,9 +38,9 @@ GaitAnalyzer.get_plate_contacts(bodyweight=bodyweight,
 # trialdata.forces['forceplate_0'].plot()
 #%%
 EMG_channels = np.arange(0, 16)
-trialdata_h5.parse_EMG_data(EMG_channels)
+trialdata.parse_EMG_data(EMG_channels)
 #%%
-h5h.save_data(trialdata_h5, 'test_output_with_emg.h5')
+h5h.save_data(trialdata, 'test_output_with_emg.h5')
 #%%
 # h5_file = h5py.File('test_output.h5', 'r')
 

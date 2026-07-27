@@ -214,6 +214,13 @@ def build_extloads(r_idx, output_file, mot_file=None, h5_file=None):
 def read_storage(path):
     lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
     end = next(i for i, ln in enumerate(lines) if ln.strip().lower() == "endheader")
+    metadata = {}
+    for ln in lines[0:end]:
+        if not ln.strip():
+            continue
+        if "=" in ln:
+            key, value = ln.split("=", 1)
+            metadata[key.strip()] = value.strip()
     header = [h.strip() for h in lines[end + 1].split("\t")]
     cols = {h: [] for h in header}
     for ln in lines[end + 2:]:
@@ -221,8 +228,13 @@ def read_storage(path):
             continue
         for h, v in zip(header, ln.split("\t")):
             cols[h].append(float(v))
-    return {h: np.asarray(v) for h, v in cols.items()}
 
+    return_dict = {h: np.asarray(v) for h, v in cols.items()}
+    return_dict["metadata"] = metadata
+    return return_dict
+
+read_sto = read_storage  # alias for convenience
+read_mot = read_storage  # alias for convenience
 
 def read_trc(path):
     """Return (time, marker_fn, marker_names). marker_fn(name) -> (n,3) X,Y,Z array."""

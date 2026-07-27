@@ -8,11 +8,12 @@ import numpy as np
 import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from ibo_biomech.utils.utils import read_sto, read_mot
 from .forceData import ForceData
 from .markerData import MarkerData
 from .analogData import AnalogData
 from .emgData import EMGData
-
+from .data import Data
 
 @dataclass
 class TrialData:
@@ -38,6 +39,8 @@ class TrialData:
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
     emgs: Dict[str, EMGData] = field(default_factory=dict)
+    IKResults: Dict[str, Data] = field(default_factory=dict)
+    IDResults: Dict[str, Data] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
 
     def __post_init__(self):
@@ -67,6 +70,39 @@ class TrialData:
                     channel=analog.channel
                 )
                 self.emgs[analog.name] = emg
+
+    def attach_IK_results(self, ik_results_file: str) -> None:
+        """Attach inverse kinematics results to the trial.
+
+        Args:
+            ik_results_file: Path to the IK results file.
+        """
+        ik_results = read_sto(ik_results_file)
+        metadata = ik_results.get("metadata", {})
+        inDegrees = metadata.get("inDegrees", None)
+        for key, value in ik_results.items():
+            if key != "time" and key != "metadata":
+                self.IKResults[key] = Data(name=key, 
+                                           data=value, 
+                                           unit="rad" if not inDegrees else "deg", 
+                                           time=ik_results["time"],
+                                           metadata=metadata)
+
+    def attach_ID_results(self, id_results_file: str) -> None:
+            """Attach inverse dynamics results to the trial.
+
+            Args:
+                id_results_file: Path to the ID results file.
+            """
+            id_results = read_sto(id_results_file)
+            metadata = id_results.get("metadata", {})
+            for key, value in id_results.items():
+                if key != "time" and key != "metadata":
+                    self.IDResults[key] = Data(name=key, 
+                                               data=value, 
+                                               unit="", 
+                                               time=id_results["time"],
+                                               metadata=metadata)
 
     def rotate_markers(self, axis: str, angle_deg: float) -> None:
         """Rotate every marker about an axis in place.
@@ -285,7 +321,8 @@ class TrialData:
         return (
             f"TrialData(name={self.name!r}, markers={len(self.markers)}, "
             f"analogs={len(self.analogs)}, forces={len(self.forces)}, "
-            f"emgs={len(self.emgs)})"
+            f"emgs={len(self.emgs)}, IKResults={len(self.IKResults)}," 
+            f"IDResults={len(self.IDResults)})"
         )
 
     def __str__(self) -> str:
