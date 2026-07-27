@@ -86,3 +86,15 @@ class AnalogData:
         plt.ylabel(f'Signal ({self.unit})')
         plt.title(f'Analog Signal: {self.name}')
         plt.show()
+
+    def __repr__(self) -> str:
+        """Return a concise summary of the analog channel."""
+        return (
+            f"AnalogData(name={self.name!r}, samples={self.data.size}, "
+            f"sampling_rate={self.sampling_rate}, unit={self.unit!r}, "
+            f"channel={self.channel})"
+        )
+
+    def __str__(self) -> str:
+        """Return the same concise summary as :meth:`__repr__`."""
+        return self.__repr__()

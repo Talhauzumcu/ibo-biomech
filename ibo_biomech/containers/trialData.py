@@ -128,6 +128,8 @@ class TrialData:
             analog.crop(start_idx, end_idx)
         for force in self.forces.values():
             force.crop(start_idx, end_idx)
+        for emg in self.emgs.values():
+            emg.crop(start_idx, end_idx)
 
     def lowpass_filter(self, cutoff_marker: float, cutoff_analog: float, cutoff_force: float, order: int = 4) -> None:
         """Low-pass filter markers, analogs and forces with separate cutoffs.
@@ -172,6 +174,16 @@ class TrialData:
         for force in self.forces.values():
             force.lowpass_filter(cutoff_freq, order)
 
+    def lowpass_filter_emgs(self, cutoff_freq: float, order: int = 4) -> None:
+        """Low-pass filter every EMG channel in place.
+
+        Args:
+            cutoff_freq: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+        """
+        for emg in self.emgs.values():
+            emg.lowpass_filter(cutoff_freq, order)
+            
     def add_marker(self, marker_data: MarkerData) -> None:
         """Add (or replace) a marker, keyed by its name.
 
@@ -269,5 +281,13 @@ class TrialData:
         pass        
 
     def __repr__(self) -> str:
-        """Return a multi-line summary of the trial's contents."""
-        return f"TrialData \n {'-'*50}\n name={self.name}\n{'-'*50}\nmetadata={self.metadata}\n{'-'*50}\nmarkers={list(self.markers.keys())}\n {'-'*50}\nanalogs={list(self.analogs.keys())}\n{'-'*50}\nforces={list(self.forces.keys())})"
+        """Return a concise summary of the trial's contents."""
+        return (
+            f"TrialData(name={self.name!r}, markers={len(self.markers)}, "
+            f"analogs={len(self.analogs)}, forces={len(self.forces)}, "
+            f"emgs={len(self.emgs)})"
+        )
+
+    def __str__(self) -> str:
+        """Return the same concise summary as :meth:`__repr__`."""
+        return self.__repr__()

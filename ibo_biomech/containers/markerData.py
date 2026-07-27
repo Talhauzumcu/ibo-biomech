@@ -229,5 +229,13 @@ class MarkerData:
         return NotImplemented
 
     def __repr__(self) -> str:
-        """Return a multi-line summary of the marker's contents."""
-        return f"MarkerData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit={self.unit}\n{'-'*50}\nsampling_rate={self.sampling_rate}\n{'-'*50}\nvirtual={self.virtual}\n{'-'*50}\nx={self.x}\n{'-'*50}\ny={self.y}\n{'-'*50}\nz={self.z}"
+        """Return a concise summary of the marker's contents."""
+        samples = self.x.shape[0] if hasattr(self.x, "shape") else len(self.x)
+        return (
+            f"MarkerData(name={self.name!r}, samples={samples}, unit={self.unit!r}, "
+            f"sampling_rate={self.sampling_rate}, virtual={self.virtual})"
+        )
+
+    def __str__(self) -> str:
+        """Return the same concise summary as :meth:`__repr__`."""
+        return self.__repr__()

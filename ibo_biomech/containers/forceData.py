@@ -300,7 +300,13 @@ class ForceData:
         return self.unit_cop
 
     def __repr__(self) -> str:
-        """Return a multi-line summary of the force plate's contents."""
-        return (f"ForceData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit_force={self.unit_force}\n"
-                f"{'-'*50}\nunit_moment={self.unit_moment}\n{'-'*50}\nunit_cop={self.unit_cop}\n{'-'*50}\nsampling_rate={self.sampling_rate}\n"
-                f"{'-'*50}\nnum_samples={self.num_samples}\n{'-'*50}")
+        """Return a concise summary of the force plate's contents."""
+        return (
+            f"ForceData(name={self.name!r}, samples={self.num_samples}, "
+            f"unit_force={self.unit_force!r}, unit_moment={self.unit_moment!r}, "
+            f"unit_cop={self.unit_cop!r}, sampling_rate={self.sampling_rate})"
+        )
+
+    def __str__(self) -> str:
+        """Return the same concise summary as :meth:`__repr__`."""
+        return self.__repr__()

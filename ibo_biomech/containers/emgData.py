@@ -169,6 +169,15 @@ class EMGData:
         plt.title(f'Processed EMG Signal: {self.name}')
         plt.show()
 
+    def crop(self, start_idx: int, end_idx: int) -> None:
+            """Crop the signal in place to ``[start_idx, end_idx)``.
+    
+            Args:
+                start_idx: First sample index to keep.
+                end_idx: First sample index to drop (exclusive).
+            """
+            self.data = self.data[start_idx:end_idx]
+            
     @property
     def processed_data(self) -> np.ndarray:
         """The processed EMG envelope, computed once and cached.
@@ -184,7 +193,13 @@ class EMGData:
         return self._processed_data
 
     def __repr__(self) -> str:
-        """Return a multi-line summary of the EMG channel's contents."""
-        return (f"EMGData \n {'-'*50}\n name={self.name}\n{'-'*50}\nunit={self.unit}\n"
-                f"{'-'*50}\nsampling_rate={self.sampling_rate}\n{'-'*50}\nchannel={self.channel}\n"
-                f"{'-'*50}\ndata_shape={self.data.shape}\n{'-'*50}")
+        """Return a concise summary of the EMG channel's contents."""
+        return (
+            f"EMGData(name={self.name!r}, samples={self.data.size}, "
+            f"sampling_rate={self.sampling_rate}, unit={self.unit!r}, "
+            f"channel={self.channel})"
+        )
+
+    def __str__(self) -> str:
+        """Return the same concise summary as :meth:`__repr__`."""
+        return self.__repr__()

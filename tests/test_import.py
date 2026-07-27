@@ -40,6 +40,22 @@ def test_subject_construction():
     assert subject.id == "P01"
 
 
+def test_container_reprs_are_compact_and_informative():
+    marker = MarkerData(name="TEST", x=np.array([1.0, 2.0, 3.0]), y=np.array([1.0, 2.0, 3.0]), z=np.array([1.0, 2.0, 3.0]), sampling_rate=100.0)
+    analog = AnalogData(name="EMG1", data=np.zeros(300), sampling_rate=1000.0, channel=0)
+    force = ForceData(name="FP1", force=np.zeros((3, 10)), moment=np.zeros((3, 10)), cop=np.zeros((3, 10)))
+    trial = TrialData(name="trial_01", markers={"TEST": marker}, analogs={"EMG1": analog}, forces={"FP1": force})
+    subject = Subject(id="P01", trials={"trial_01": trial})
+
+    assert "MarkerData" in repr(marker)
+    assert "name='TEST'" in repr(marker)
+    assert "samples=3" in repr(marker)
+    assert "TrialData" in repr(trial)
+    assert "markers=1" in repr(trial)
+    assert "Subject" in repr(subject)
+    assert "trials=1" in repr(subject)
+
+
 def test_c3d_handler_file_not_found():
     handler = C3DHandler("nonexistent.c3d")
     with pytest.raises(FileNotFoundError):

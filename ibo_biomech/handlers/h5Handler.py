@@ -6,7 +6,7 @@ from typing import Dict, Optional, Any, List
 import h5py
 import numpy as np
 
-from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData, Subject
+from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject
 
 
 class H5Handler:
@@ -54,6 +54,7 @@ class H5Handler:
             markers = self._load_markers(h5f)
             analogs = self._load_analogs(h5f)
             forces = self._load_forces(h5f)
+            emgs = self._load_emgs(h5f)  
             metadata = dict(h5f["MetaData"].attrs)
 
         return TrialData(
@@ -61,6 +62,7 @@ class H5Handler:
             markers=markers,
             analogs=analogs,
             forces=forces,
+            emgs=emgs,
             metadata=metadata,
         )
 
@@ -109,6 +111,7 @@ class H5Handler:
             self._save_markers(h5f, trial)
             self._save_analogs(h5f, trial)
             self._save_forces(h5f, trial)
+            self._save_emgs(h5f, trial)
             h5f["MetaData"].attrs["LastUpdate"] = str(datetime.now())
 
         print(f"Saved processed trial to {out_path}")
@@ -170,6 +173,34 @@ class H5Handler:
         analog_group.attrs["Labels"] = ordered
         analog_group.attrs["NumSamples"] = n_samples
         analog_group.attrs["SamplingFrequency"] = sample_analog.sampling_rate
+
+    def _save_emgs(self, h5f: h5py.File, trial: TrialData) -> None:
+            """Overwrite EMG datasets from trial.emgs."""
+            if not trial.emgs:
+                return
+
+            if 'EMG' not in h5f.keys():
+                emg_group = h5f.create_group("EMG")
+                emg_group.attrs["Labels"] = []
+                emg_group.attrs["NumSamples"] = 0
+                emg_group.attrs["SamplingFrequency"] = 0.0
+
+            existing_labels = self._decode_labels(emg_group.attrs.get("Labels", []))
+            ordered = existing_labels + [l for l in trial.emgs if l not in existing_labels]
+            sample_emg = next(iter(trial.emgs.values()))
+            n_samples = len(sample_emg.data)
+    
+            data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+            for i, label in enumerate(ordered):
+                if label in trial.emgs:
+                    data[i] = trial.emgs[label].data
+
+            if "Data" in emg_group:
+                del emg_group["Data"]
+            emg_group.create_dataset("Data", data=data, compression="gzip")
+            emg_group.attrs["Labels"] = ordered
+            emg_group.attrs["NumSamples"] = n_samples
+            emg_group.attrs["SamplingFrequency"] = sample_emg.sampling_rate
 
     def _save_forces(self, h5f: h5py.File, trial: TrialData) -> None:
         """Overwrite force plate datasets from trial.forces."""
@@ -277,6 +308,34 @@ class H5Handler:
             )
 
         return analogs
+
+    def _load_emgs(self, h5f: h5py.File) -> Dict[str, EMGData]:
+        """Parse EMG channels into {label: EMGData}."""
+        emgs: Dict[str, EMGData] = {}
+
+        emg_group = h5f.get("EMG")
+        if emg_group is None:
+            return emgs
+
+        sampling_rate = emg_group.attrs.get("SamplingFrequency")
+        if sampling_rate is not None:
+            sampling_rate = float(sampling_rate)
+
+        labels = self._decode_labels(emg_group.attrs.get("Labels", []))
+        if not labels:
+            return emgs
+
+        data = emg_group["Data"][:]  # shape: (n_channels, n_samples)
+
+        for i, label in enumerate(labels):
+            emgs[label] = EMGData(
+                name=label,
+                data=data[i],
+                sampling_rate=sampling_rate,
+                channel=i,
+            )
+
+        return emgs
 
     def _load_forces(self, h5f: h5py.File) -> Dict[str, ForceData]:
         """Parse force plate groups into {name: ForceData}."""

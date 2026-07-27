@@ -114,9 +114,12 @@ class Subject:
         return subject
 
     def __str__(self):
-        """Return a short one-line summary of the subject."""
-        return f"Subject(id={self.id}, trials={list(self.trials.keys())})"
+        """Return a short summary of the subject."""
+        return (
+            f"Subject(id={self.id!r}, condition={self.condition!r}, "
+            f"trials={len(self.trials)}, trials_loaded={self.trials_loaded})"
+        )
 
     def __repr__(self):
-        """Return a short one-line summary of the subject."""
-        return f"Subject(id={self.id}, trials={list(self.trials.keys())})"
+        """Return a short summary of the subject."""
+        return self.__str__()
