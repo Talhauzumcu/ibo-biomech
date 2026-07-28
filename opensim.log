@@ -255,3 +255,4 @@
 [2026-07-09 15:24:08.192] [warning] Couldn't find file 'thumb_distal_lvs.vtp'.
 [2026-07-09 15:24:08.192] [warning] Couldn't find file 'r_tibia_prox.obj'.
 [2026-07-09 15:24:08.236] [info] Loaded marker file test_output.trc (42 markers, 225 frames)
+[2026-07-28 12:13:03.660] [info] Loaded marker file ./._temp_trc.trc (42 markers, 225 frames)

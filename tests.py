@@ -24,6 +24,7 @@ h5h = H5Handler('test_output.h5')
 trialdata = h5h.load_data()
 trialdata.attach_IK_results('example_data/IKResults.mot')
 trialdata.attach_ID_results('example_data/inverse_dynamics.sto')
+trialdata.crop(0,100)
 h5h.save_data(trialdata, 'test_output_with_results.h5')
 #%%
 bodyweight = 879
@@ -64,7 +65,7 @@ OsimHandler.run_ik(model_path=model,
 OsimHandler.run_scaling(model_path=model, 
                         setup_file='example_scale_setup.xml', 
                         move_markers = True, 
-                        trc_file=trc_file, 
+                        h5_file=h5_file, 
                         output_file='test_output/test_output_scaled.osim', 
                         mass=70,
                         initial_time=0.5,

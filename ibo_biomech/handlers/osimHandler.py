@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 import opensim as osim
 import os
+import tempfile
 from ibo_biomech.utils.utils import read_storage
 
 class OsimHandler:
@@ -44,8 +45,10 @@ class OsimHandler:
             log_file: Path to the log file for the IK process.
         """
 
-        if h5_file is not None:
-            trc_file = OsimHandler._trc_from_h5(h5_file) #Needs to be removed after use
+        temp_trc_created = False
+        if h5_file is not None and trc_file is None:
+            trc_file = OsimHandler._trc_from_h5(h5_file)
+            temp_trc_created = True
 
         if model_path is None:
             raise ValueError("a valid model_path must be provided.")
@@ -64,8 +67,9 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else ikTool.getOutputMotionFileName()
-        log_file = log_file if log_file else output_file.replace('.mot', '.log')
+        log_file = log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         trc_file = trc_file if trc_file else ikTool.getMarkerDataFileName()
+        trc_file = str(Path(trc_file).resolve())
         markerData = osim.MarkerData(str(trc_file))
         if initial_time is None:
             initial_time = markerData.getStartFrameTime()
@@ -80,6 +84,7 @@ class OsimHandler:
         osim.Logger.addFileSink(str(log_file))
         osim.Logger.setLevelString("Info")
 
+    
         print(f"Running IK with model: {model_path}, TRC: {trc_file}")
         ikTool.setModel(model)
         ikTool.setStartTime(initial_time)
@@ -92,13 +97,13 @@ class OsimHandler:
 
         if log_file:
             osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
-        if h5_file is not None:
+        if temp_trc_created and trc_file and os.path.exists(trc_file):
             os.remove(trc_file)  # Clean up the temporary TRC file if it was created from HDF5
 
     @staticmethod
     def run_scaling(model_path: str, 
                     setup_file: str,
-                    trc_file: str,
+                    trc_file: str=None,
                     h5_file: str=None,
                     mass: float=None,
                     height: float=None,
@@ -129,8 +134,10 @@ class OsimHandler:
         Returns:
             Path to the scaled model file.
         """
-        if h5_file is not None:
-            trc_file = OsimHandler._trc_from_h5(h5_file) #Needs to be removed after use
+        temp_trc_created = False
+        if h5_file is not None and trc_file is None:
+            trc_file = OsimHandler._trc_from_h5(h5_file)
+            temp_trc_created = True
 
         if model_path is None:
             raise ValueError("a valid model_path must be provided.")
@@ -141,11 +148,12 @@ class OsimHandler:
         if setup_file is None:
             raise ValueError("a valid setup_file must be provided.")
 
+        trc_file = str(Path(trc_file).resolve())
         print(f"Running Scaling with model: {model_path}, TRC: {trc_file}")
         setup_file = Path(setup_file).resolve()
         scalingTool = osim.ScaleTool(str(setup_file))
         output_file = output_file if output_file is not None else scalingTool.getModelScaler().getOutputModelFileName()
-        log_file = log_file if log_file is not None else output_file.replace('.osim', '.log')
+        log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         mass = mass if mass is not None else scalingTool.getSubjectMass()
         height = height if height is not None else scalingTool.getSubjectHeight()
         markerData = osim.MarkerData(str(trc_file))
@@ -184,9 +192,12 @@ class OsimHandler:
         markerPlacer.setTimeRange(time_range)
         markerPlacer.setOutputModelFileName(rel_output_path) 
 
+      
         scalingTool.run()
-
+    
         osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
+        if temp_trc_created and trc_file and os.path.exists(trc_file):
+            os.remove(trc_file)
         return output_file
 
     @staticmethod
@@ -236,7 +247,7 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else idTool.getOutputGenForceFileName()
-        log_file = log_file if log_file else output_file.replace('.sto', '.log')
+        log_file = log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         mot_file = mot_file if mot_file else idTool.getCoordinatesFileName()
         external_loads_file = external_loads_file if external_loads_file else idTool.getExternalLoadsFileName()
         
@@ -272,9 +283,12 @@ class OsimHandler:
         """Convert an HDF5 file to a TRC file to use with OpenSim"""
 
         from ibo_biomech import FileConverter
-        trc_file = './._temp_trc.trc'
-        FileConverter.h5_to_trc(h5_file, trc_file)
-        return trc_file
+        temp_dir = Path(h5_file).resolve().parent
+        fd, trc_name = tempfile.mkstemp(prefix='temp_', suffix='.trc', dir=str(temp_dir))
+        os.close(fd)
+        trc_file = Path(trc_name)
+        FileConverter.h5_to_trc(h5_file, str(trc_file))
+        return str(trc_file)
     
     @staticmethod
     def _mot_from_h5(h5_file: str):
