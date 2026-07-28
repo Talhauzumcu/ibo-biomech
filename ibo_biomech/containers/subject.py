@@ -6,9 +6,6 @@ participant together with descriptive data and a simple pickle-based cache.
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from .forceData import ForceData
-from .markerData import MarkerData
-from .analogData import AnalogData
 from .trialData import TrialData
 from pathlib import Path
 import pickle

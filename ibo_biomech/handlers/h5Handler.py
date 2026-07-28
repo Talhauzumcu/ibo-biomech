@@ -181,91 +181,91 @@ class H5Handler:
         analog_group.attrs["SamplingFrequency"] = sample_analog.sampling_rate
 
     def _save_emgs(self, h5f: h5py.File, trial: TrialData) -> None:
-            """Overwrite EMG datasets from trial.emgs."""
-            if not trial.emgs:
-                return
+        """Overwrite EMG datasets from trial.emgs."""
+        if not trial.emgs:
+            return
 
-            if 'EMG' not in h5f.keys():
-                emg_group = h5f.create_group("EMG")
-                emg_group.attrs["Labels"] = []
-                emg_group.attrs["NumSamples"] = 0
-                emg_group.attrs["SamplingFrequency"] = 0.0
+        if 'EMG' not in h5f.keys():
+            emg_group = h5f.create_group("EMG")
+            emg_group.attrs["Labels"] = []
+            emg_group.attrs["NumSamples"] = 0
+            emg_group.attrs["SamplingFrequency"] = 0.0
 
-            existing_labels = self._decode_labels(emg_group.attrs.get("Labels", []))
-            ordered = existing_labels + [l for l in trial.emgs if l not in existing_labels]
-            sample_emg = next(iter(trial.emgs.values()))
-            n_samples = len(sample_emg.data)
-    
-            data = np.zeros((len(ordered), n_samples), dtype=np.float64)
-            for i, label in enumerate(ordered):
-                if label in trial.emgs:
-                    data[i] = trial.emgs[label].data
+        existing_labels = self._decode_labels(emg_group.attrs.get("Labels", []))
+        ordered = existing_labels + [l for l in trial.emgs if l not in existing_labels]
+        sample_emg = next(iter(trial.emgs.values()))
+        n_samples = len(sample_emg.data)
 
-            if "Data" in emg_group:
-                del emg_group["Data"]
-            emg_group.create_dataset("Data", data=data, compression="gzip")
-            emg_group.attrs["Labels"] = ordered
-            emg_group.attrs["NumSamples"] = n_samples
-            emg_group.attrs["SamplingFrequency"] = sample_emg.sampling_rate
+        data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+        for i, label in enumerate(ordered):
+            if label in trial.emgs:
+                data[i] = trial.emgs[label].data
+
+        if "Data" in emg_group:
+            del emg_group["Data"]
+        emg_group.create_dataset("Data", data=data, compression="gzip")
+        emg_group.attrs["Labels"] = ordered
+        emg_group.attrs["NumSamples"] = n_samples
+        emg_group.attrs["SamplingFrequency"] = sample_emg.sampling_rate
 
     def _save_ik_results(self, h5f: h5py.File, trial: TrialData) -> None:
-                """Overwrite IK results datasets from trial.IKResults."""
-                if not trial.IKResults:
-                    return
-    
-                if 'IKResults' not in h5f.keys():
-                    ik_group = h5f.create_group("IKResults")
-                    ik_group.attrs["Labels"] = ['time']
-                    ik_group.attrs["NumSamples"] = 0
-    
-                existing_labels = self._decode_labels(ik_group.attrs.get("Labels", []))
-                ordered = existing_labels + [l for l in trial.IKResults if l not in existing_labels]
-                sample_ik = next(iter(trial.IKResults.values()))
-                n_samples = len(sample_ik.data)
-                time = sample_ik.time
-                metadata = sample_ik.metadata
+        """Overwrite IK results datasets from trial.IKResults."""
+        if not trial.IKResults:
+            return
 
-                data = np.zeros((len(ordered), n_samples), dtype=np.float64)
-                data[0] = time  # First row is time
-                for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
-                    if label in trial.IKResults:
-                        data[i] = trial.IKResults[label].data
-    
-                if "Data" in ik_group:
-                    del ik_group["Data"]
-                ik_group.create_dataset("Data", data=data, compression="gzip")
-                ik_group.attrs["Labels"] = ordered
-                ik_group.attrs["NumSamples"] = n_samples
-                ik_group.attrs["Metadata"] = str(metadata)  # Store metadata as a string representation
+        if 'IKResults' not in h5f.keys():
+            ik_group = h5f.create_group("IKResults")
+            ik_group.attrs["Labels"] = ['time']
+            ik_group.attrs["NumSamples"] = 0
+
+        existing_labels = self._decode_labels(ik_group.attrs.get("Labels", []))
+        ordered = existing_labels + [l for l in trial.IKResults if l not in existing_labels]
+        sample_ik = next(iter(trial.IKResults.values()))
+        n_samples = len(sample_ik.data)
+        time = sample_ik.time
+        metadata = sample_ik.metadata
+
+        data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+        data[0] = time  # First row is time
+        for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
+            if label in trial.IKResults:
+                data[i] = trial.IKResults[label].data
+
+        if "Data" in ik_group:
+            del ik_group["Data"]
+        ik_group.create_dataset("Data", data=data, compression="gzip")
+        ik_group.attrs["Labels"] = ordered
+        ik_group.attrs["NumSamples"] = n_samples
+        ik_group.attrs["Metadata"] = str(metadata)  # Store metadata as a string representation
 
     def _save_id_results(self, h5f: h5py.File, trial: TrialData) -> None:
-                    """Overwrite IK results datasets from trial.IKResults."""
-                    if not trial.IDResults:
-                        return
+        """Overwrite IK results datasets from trial.IKResults."""
+        if not trial.IDResults:
+            return
+
+        if 'IDResults' not in h5f.keys():
+            id_group = h5f.create_group("IDResults")
+            id_group.attrs["Labels"] = ['time']
+            id_group.attrs["NumSamples"] = 0
+
+        existing_labels = self._decode_labels(id_group.attrs.get("Labels", []))
+        ordered = existing_labels + [l for l in trial.IDResults if l not in existing_labels]
+        sample_id = next(iter(trial.IDResults.values()))
+        n_samples = len(sample_id.data)
+        time = sample_id.time
         
-                    if 'IDResults' not in h5f.keys():
-                        id_group = h5f.create_group("IDResults")
-                        id_group.attrs["Labels"] = ['time']
-                        id_group.attrs["NumSamples"] = 0
-        
-                    existing_labels = self._decode_labels(id_group.attrs.get("Labels", []))
-                    ordered = existing_labels + [l for l in trial.IDResults if l not in existing_labels]
-                    sample_id = next(iter(trial.IDResults.values()))
-                    n_samples = len(sample_id.data)
-                    time = sample_id.time
-                    
-                    data = np.zeros((len(ordered), n_samples), dtype=np.float64)
-                    data[0] = time  # First row is time
-                    for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
-                        if label in trial.IDResults:
-                            data[i] = trial.IDResults[label].data
-        
-                    if "Data" in id_group:
-                        del id_group["Data"]
-                    id_group.create_dataset("Data", data=data, compression="gzip")
-                    id_group.attrs["Labels"] = ordered
-                    id_group.attrs["NumSamples"] = n_samples
-                    id_group.attrs["Metadata"] = str(sample_id.metadata)  # Store metadata as a string representation
+        data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+        data[0] = time  # First row is time
+        for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
+            if label in trial.IDResults:
+                data[i] = trial.IDResults[label].data
+
+        if "Data" in id_group:
+            del id_group["Data"]
+        id_group.create_dataset("Data", data=data, compression="gzip")
+        id_group.attrs["Labels"] = ordered
+        id_group.attrs["NumSamples"] = n_samples
+        id_group.attrs["Metadata"] = str(sample_id.metadata)  # Store metadata as a string representation
 
     def _save_forces(self, h5f: h5py.File, trial: TrialData) -> None:
         """Overwrite force plate datasets from trial.forces."""

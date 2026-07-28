@@ -20,9 +20,11 @@ FileConverter.h5_to_opensim('test_output.h5', 'test_output.mot', 'test_output.tr
 #%%
 FileConverter.c3d_to_opensim(filename, 'test_output_direct.mot', 'test_output_direct.trc')
 #%%
-h5h = H5Handler('test_output_w_IK.h5')
+h5h = H5Handler('test_output.h5')
 trialdata = h5h.load_data()
-
+trialdata.attach_IK_results('example_data/IKResults.mot')
+trialdata.attach_ID_results('example_data/inverse_dynamics.sto')
+h5h.save_data(trialdata, 'test_output_with_results.h5')
 #%%
 bodyweight = 879
 marker_re = 'R_ToesTop'
