@@ -8,3 +8,4 @@
 #Add methods such as add_force, add_emg etc similar to how add_marker works.
 #Trialdata cropping should consider IK and ID results
 #IK and ID data should have residual informations
+#Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?

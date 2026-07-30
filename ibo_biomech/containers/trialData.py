@@ -8,7 +8,7 @@ import numpy as np
 import os
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
-from ibo_biomech.utils.utils import read_sto, read_mot
+from ibo_biomech.utils.utils import read_sto, read_mot, time_normalize
 from .forceData import ForceData
 from .markerData import MarkerData
 from .analogData import AnalogData
@@ -229,7 +229,7 @@ class TrialData:
         """
         self.markers[marker_data.name] = marker_data
 
-    def as_df(self, data_dict: Dict[str, Any]) -> pd.DataFrame:
+    def as_df(self, data_dict: Dict[str, Any], time_normalize=False) -> pd.DataFrame:
         """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include
         the metadata for easy plotting and analysis.
         

@@ -260,3 +260,19 @@ def read_trc(path):
         c = start_col[nm]
         return D[:, c:c + 3]
     return t, marker, set(start_col)
+
+def time_normalize(signal, num_points=100):
+    """Normalize a 1D signal to a fixed number of points using linear interpolation. 
+    Assumes equal spacing in the original signal. The normalized signal will have a new time axis from 0 to 100%.
+    
+    Args:
+        signal: 1D array-like signal to normalize.
+        num_points: Number of points to normalize to. Defaults to 100.
+    Returns:
+        new_time: 1D array of length num_points representing the normalized time axis (0 to 100%).
+        normalized_signal: 1D array of length num_points.
+    """
+    original_length = len(signal)
+    normalized_signal = np.interp(np.linspace(0, original_length - 1, num_points), np.arange(original_length), signal)
+    new_time = np.linspace(0,100, num_points)
+    return (new_time,normalized_signal)
