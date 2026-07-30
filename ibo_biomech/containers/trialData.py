@@ -14,6 +14,7 @@ from .markerData import MarkerData
 from .analogData import AnalogData
 from .emgData import EMGData
 from .data import Data
+import pandas as pd
 
 @dataclass
 class TrialData:
@@ -227,6 +228,39 @@ class TrialData:
             marker_data: The marker to store.
         """
         self.markers[marker_data.name] = marker_data
+
+    def as_df(self, data_dict: Dict[str, Any]) -> pd.DataFrame:
+        """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include
+        the metadata for easy plotting and analysis.
+        
+        Args:
+            data_dict: Dictionary of data objects (MarkerData, ForceData, AnalogData, etc.)
+        Returns:
+            A pandas DataFrame containing the data and metadata.
+        """
+        df = pd.DataFrame()
+        for key, value in data_dict.items():
+            if isinstance(value, MarkerData):
+                df[f'{key}_x'] = value.x
+                df[f'{key}_y'] = value.y
+                df[f'{key}_z'] = value.z
+            elif isinstance(value, ForceData):
+                df[f'{key}_Fx'] = value.Fx
+                df[f'{key}_Fy'] = value.Fy
+                df[f'{key}_Fz'] = value.Fz
+                df[f'{key}_Mx'] = value.Mx
+                df[f'{key}_My'] = value.My
+                df[f'{key}_Mz'] = value.Mz
+                df[f'{key}_CoPx'] = value.CoPx
+                df[f'{key}_CoPy'] = value.CoPy
+            else:
+                df[key] = value.data
+        for key, value in self.metadata.items():
+            if isinstance(value, np.ndarray):
+                #Skip if the metadata is an array, as it will not fit into a column of the dataframe
+                continue
+            df[key] = value
+        return df
 
     def get_marker_names(self) -> List[str]:
         """Return the list of marker labels.

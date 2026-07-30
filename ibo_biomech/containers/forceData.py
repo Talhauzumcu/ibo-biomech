@@ -299,6 +299,11 @@ class ForceData:
         """Unit of the plate position data (alias of :attr:`unit_cop`)."""
         return self.unit_cop
 
+    @property
+    def data(self) -> np.ndarray:
+        """Return the force, moment and CoP as a single array of shape ``(9, n_samples)``."""
+        return np.vstack((self.force, self.moment, self.cop))
+
     def __repr__(self) -> str:
         """Return a concise summary of the force plate's contents."""
         return (

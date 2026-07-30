@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from .trialData import TrialData
 from pathlib import Path
 import pickle
+import pandas as pd
 
 @dataclass
 class Subject:
@@ -29,7 +30,6 @@ class Subject:
     body_height: float = None
     age: int = None
     trials: Dict[str, TrialData] = field(default_factory=dict)
-    trials_loaded: bool = False
 
     def add_trial(self, trial_name: str, trial_data: TrialData) -> None:
         """Add (or replace) a trial keyed by name.
@@ -109,12 +109,27 @@ class Subject:
                 setattr(subject, attr, getattr(cached_subject, attr))
 
         return subject
+    def as_df(self, dict_name: str) -> pd.DataFrame:
+        """Concatanates all trial data into a single DataFrame for analysis with the given data_dict. 
+        Does not save the df to the instance since it can be ambiguous regarding data type (IKResults, marker data, etc.) and can be large.
+
+        Args:
+            dict_name: Name of the data dictionary to extract from each trial (Supports: IKResults, 
+            IDResults, markerData, forceData, emgData, analogData)
+        """
+        df = pd.DataFrame()
+        for trial_name, trial_data in self.trials.items():
+            trial_dict = trial_data.__dict__[dict_name]
+            trial_df = trial_data.as_df(trial_dict)
+            trial_df['trial_name'] = trial_name
+            df = pd.concat([df, trial_df], ignore_index=True)
+        return df
 
     def __str__(self):
         """Return a short summary of the subject."""
         return (
             f"Subject(id={self.id!r}, condition={self.condition!r}, "
-            f"trials={len(self.trials)}, trials_loaded={self.trials_loaded})"
+            f"trials={len(self.trials)})"
         )
 
     def __repr__(self):

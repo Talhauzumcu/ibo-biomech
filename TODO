@@ -1,4 +1,5 @@
 
+#Croping is not considering different sampling rates. If forces are sampled at a higher freq they will get cut off very early.
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #Check out the labeled residual formatting
 #unlabaled trajectories need to be handled
