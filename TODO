@@ -6,3 +6,4 @@
 #opensim result supports for h5 files
 #Add methods such as add_force, add_emg etc similar to how add_marker works.
 #Trialdata cropping should consider IK and ID results
+#IK and ID data should have residual informations

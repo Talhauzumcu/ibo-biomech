@@ -1,3 +1,4 @@
+from __future__ import annotations
 import os
 import shutil
 from datetime import datetime
@@ -122,7 +123,28 @@ class H5Handler:
 
         print(f"Saved processed trial to {out_path}")
         return out_path
-    
+
+    def modify_metadata(self, updates: Dict[str, Any], out_path: Optional[str] = None) -> H5Handler:
+        """Modify metadata attributes in the HDF5 file.
+
+        Args:
+            updates: A dictionary of metadata attributes to update.
+            out_path: Optional path to save the modified file. If None, the original file is overwritten.
+        Returns:
+            H5Handler: A new H5Handler instance pointing to the modified file.
+        """
+        if out_path is None:
+            out_path = self.h5_path
+
+        shutil.copy2(self.h5_path, out_path)
+
+        with h5py.File(out_path, "r+") as h5f:
+            for key, value in updates.items():
+                h5f["MetaData"].attrs[key] = value
+
+        print(f"Modified metadata in {out_path}")
+        return self.from_path(out_path)
+
     def _save_markers(self, h5f: h5py.File, trial: TrialData) -> None:
         """Overwrite labeled trajectory datasets from trial.markers."""
         labeled = h5f["Trajectories/Labeled"]
@@ -514,3 +536,8 @@ class H5Handler:
             else:
                 labels.append(str(item))
         return labels
+
+    @classmethod
+    def from_path(cls, path: str) -> H5Handler:
+        """Create an H5Handler from a file path."""
+        return cls(path)
