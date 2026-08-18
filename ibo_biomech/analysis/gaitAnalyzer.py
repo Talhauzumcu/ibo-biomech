@@ -9,6 +9,13 @@ from scipy.signal import find_peaks
 import numpy as np
 
 class GaitAnalyzer:
+    """Gait analysis functionality for biomechanics data.
+    
+    Provides methods for analyzing gait events such as foot contacts detected
+    from force plate data and calculating stance times and step lengths from
+    motion capture markers. Adapted from original code by Marvin Zedler to work
+    with TrialData objects.
+    """
 
     @staticmethod
     def get_plate_contacts(trialdata, bodyweight, marker_re, marker_li, threshold=20, threshold_multiplier=1.2, prominence_multiplier=0.8):
@@ -140,9 +147,27 @@ class GaitAnalyzer:
 
     @staticmethod
     def get_stancetimes_steplengths(markerDict, events, aFrq):
-        #This function was copied from the original source but shouldn't work since there is a hardcoded marker name in there.
-        #If needed it can be refactored in the future.
-
+        """Calculate stance times and step lengths from detected gait events.
+        
+        This function was copied from the original source and may require refactoring
+        as it contains a hardcoded marker name reference.
+        
+        Args:
+            markerDict : dict
+                Dictionary mapping marker names to marker data objects.
+            events : dict
+                Dictionary of gait events from get_plate_contacts() containing
+                "feet", "TDa", "TOa", and "TDv" keys.
+            aFrq : float
+                Analog sample rate (Hz).
+                
+        Returns:
+            stanceTimes : list
+                List of stance times in seconds for each foot contact.
+            stepLengths : list
+                List of step lengths. First element is None; subsequent elements
+                contain step length measurements between consecutive contacts.
+        """
         stanceTimes = []
         stepLengths = []
         stepLengths.append(None)
