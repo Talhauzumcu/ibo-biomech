@@ -7,7 +7,7 @@ name = "ibo-biomech"
 version = "0.2.8"
 description = "A Python library for processing and analyzing biomechanical motion capture data"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Talha", email = "talha.uzumcu21@gmail.com" }]
 keywords = ["biomechanics", "motion capture", "c3d", "opensim", "gait"]
