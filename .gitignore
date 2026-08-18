@@ -19,3 +19,6 @@ test_output/
 *.mot
 *.osim
 *.xml
+*.sto
+*.log
+tests.py
