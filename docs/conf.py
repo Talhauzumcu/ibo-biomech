@@ -31,7 +31,7 @@ extensions = [
 
 # When building on CI where heavy optional deps (like OpenSim) aren't
 # available, mock them so autodoc can import modules successfully.
-autodoc_mock_imports = ["opensim"]
+autodoc_mock_imports = ["opensim", "ezc3d", "h5py"]
 
 # Napoleon: Google style only.
 napoleon_google_docstring = True
