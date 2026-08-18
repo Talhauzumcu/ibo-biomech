@@ -23,6 +23,13 @@ api/subject
 ```
 
 ```{toctree}
+:caption: Analysis
+:hidden:
+
+api/gaitanalyzer
+```
+
+```{toctree}
 :caption: Conversion & Utilities
 :hidden:
 
