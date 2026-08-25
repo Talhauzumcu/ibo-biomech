@@ -84,12 +84,13 @@ class IDResults:
 
     def __repr__(self) -> str:
         """Return a concise summary of the data."""
+        columns_str = "\n".join(self.columns)
         return (
             f"IDResults(name={self.name!r}, samples={len(self.time)}, "
             f"unit={self.unit!r}) \n"
-            f"Columns: \n{'\n'.join(self.columns)}"
+            f"Columns: \n{columns_str}"
         )
-    
+
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
