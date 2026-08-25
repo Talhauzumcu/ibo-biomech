@@ -203,3 +203,23 @@ class EMGData:
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
+
+    def __array__(self):
+        """Allow the object to be converted to a NumPy array."""
+        return self.data
+    
+    def __getitem__(self, index):
+        """Allow indexing into the data."""
+        return self.data[index]
+
+    def __setitem__(self, index, value):
+        """Allow setting values in the data."""
+        self.data[index] = value
+
+    def __len__(self):
+        """Return the number of samples in the data."""
+        return len(self.data)
+
+    def __iter__(self):
+        """Allow iteration over the data."""
+        return iter(self.data)

@@ -1,5 +1,6 @@
 
-#Croping is not considering different sampling rates. If forces are sampled at a higher freq they will get cut off very early.
+#Check save methods for H5 to see if they still work
+#H5Loader should accept which fields to load. So you can filter it for faster loading
 #Trialdata cropping should consider IK and ID results
 #IK and ID data should have residual informations
 #Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?

@@ -13,7 +13,6 @@ from .forceData import ForceData
 from .markerData import MarkerData
 from .analogData import AnalogData
 from .emgData import EMGData
-from .data import Data
 from .IKResults import IKResults
 from .IDResults import IDResults
 import pandas as pd
@@ -43,8 +42,8 @@ class TrialData:
     forces: Dict[str, ForceData] = field(default_factory=dict)
     emgs: Dict[str, EMGData] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
-    IKResults = None
-    IDResults = None
+    ik_results: IKResults = field(default=None, repr=False)
+    id_results: IDResults = field(default=None, repr=False)
 
     def __post_init__(self):
         """Cache convenience attributes (labels and sampling rates)."""
@@ -80,7 +79,7 @@ class TrialData:
         Args:
             ik_results_file: Path to the IK results file.
         """
-        self.IKResults = IKResults(filepath=ikresults_file)
+        self.ik_results = IKResults(filepath=ikresults_file)
 
     def attach_ID_results(self, idresults_file: str) -> None:
             """Attach inverse dynamics results to the trial.
@@ -88,7 +87,7 @@ class TrialData:
             Args:
                 id_results_file: Path to the ID results file.
             """
-            self.IDResults = IDResults(filepath=idresults_file)
+            self.id_results = IDResults(filepath=idresults_file)
 
     def rotate_markers(self, axis: str, angle_deg: float) -> None:
         """Rotate every marker about an axis in place.
@@ -237,7 +236,7 @@ class TrialData:
             emg_data: The EMG channel to store.
         """
         self.emgs[emg_data.name] = emg_data
-        
+
     def as_df(self, data_dict: Dict[str, Any], time_normalize=False) -> pd.DataFrame:
         """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include
         the metadata for easy plotting and analysis.
@@ -361,11 +360,14 @@ class TrialData:
 
     def __repr__(self) -> str:
         """Return a concise summary of the trial's contents."""
+        emgs = len(self.emgs) if self.emgs is not None else 0
+        ik_results = len(self.ik_results.data) if self.ik_results is not None else 0
+        id_results = len(self.id_results.data) if self.id_results is not None else 0
         return (
             f"TrialData(name={self.name!r}, markers={len(self.markers)}, "
             f"analogs={len(self.analogs)}, forces={len(self.forces)}, "
-            f"emgs={len(self.emgs)}, IKResults={len(self.IKResults)}," 
-            f"IDResults={len(self.IDResults)})"
+            f"emgs={emgs}, IK Results={ik_results}," 
+            f"ID Results={id_results})"
         )
 
     def __str__(self) -> str:

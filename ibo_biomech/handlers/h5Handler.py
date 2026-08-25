@@ -7,7 +7,7 @@ from typing import Dict, Optional, Any, List
 import h5py
 import numpy as np
 
-from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject, Data
+from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject, IKResults, IDResults, Data
 
 
 class H5Handler:
@@ -44,20 +44,34 @@ class H5Handler:
         self.h5_path = h5_path
         self.trial_name = os.path.splitext(os.path.basename(h5_path))[0]
 
-    def load_data(self) -> TrialData:
-        """Read the HDF5 file and return a fully populated trial.
+    def load_data(self, 
+                  load_markers: bool = True,
+                  load_analogs: bool = True,
+                  load_forces: bool = True,
+                  load_emgs: bool = True,
+                  load_ik_results: bool = True,
+                  load_id_results: bool = True ) -> TrialData:
+        """Read the HDF5 file and return a fully populated trial. Accepts flags to selectively load specific data types for faster loading times
 
+        Args:
+            load_markers: Whether to load marker data.
+            load_analogs: Whether to load analog data.
+            load_forces: Whether to load force plate data.
+            load_emgs: Whether to load EMG data.
+            load_ik_results: Whether to load inverse kinematics results.
+            load_id_results: Whether to load inverse dynamics results.
         Returns:
             A :class:`~ibo_biomech.containers.TrialData` with markers, analogs,
             forces and metadata.
         """
+
         with h5py.File(self.h5_path, "r") as h5f:
-            markers = self._load_markers(h5f)
-            analogs = self._load_analogs(h5f)
-            forces = self._load_forces(h5f)
-            emgs = self._load_emgs(h5f)
-            ik_results = self._load_ik_results(h5f)
-            id_results = self._load_id_results(h5f)
+            markers = self._load_markers(h5f) if load_markers else None
+            analogs = self._load_analogs(h5f) if load_analogs else None
+            forces = self._load_forces(h5f) if load_forces else None
+            emgs = self._load_emgs(h5f) if load_emgs else None
+            ik_results = self._load_ik_results(h5f) if load_ik_results else None
+            id_results = self._load_id_results(h5f) if load_id_results else None
             metadata = dict(h5f["MetaData"].attrs)
 
         return TrialData(
@@ -66,8 +80,8 @@ class H5Handler:
             analogs=analogs,
             forces=forces,
             emgs=emgs,
-            IKResults=ik_results,
-            IDResults=id_results,
+            ik_results=ik_results,
+            id_results=id_results,
             metadata=metadata,
         )
 
@@ -231,8 +245,8 @@ class H5Handler:
         emg_group.attrs["SamplingFrequency"] = sample_emg.sampling_rate
 
     def _save_ik_results(self, h5f: h5py.File, trial: TrialData) -> None:
-        """Overwrite IK results datasets from trial.IKResults."""
-        if not trial.IKResults:
+        """Overwrite IK results datasets from trial.ik_results."""
+        if not trial.ik_results:
             return
 
         if 'IKResults' not in h5f.keys():
@@ -241,17 +255,17 @@ class H5Handler:
             ik_group.attrs["NumSamples"] = 0
 
         existing_labels = self._decode_labels(ik_group.attrs.get("Labels", []))
-        ordered = existing_labels + [l for l in trial.IKResults if l not in existing_labels]
-        sample_ik = next(iter(trial.IKResults.values()))
+        ordered = existing_labels + [l for l in trial.ik_results.data if l not in existing_labels]
+        sample_ik = next(iter(trial.ik_results.data.values()))
         n_samples = len(sample_ik.data)
         time = sample_ik.time
-        metadata = sample_ik.metadata
+        metadata = trial.ik_results.metadata
 
         data = np.zeros((len(ordered), n_samples), dtype=np.float64)
         data[0] = time  # First row is time
         for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
-            if label in trial.IKResults:
-                data[i] = trial.IKResults[label].data
+            if label in trial.ik_results.data.keys():
+                data[i] = trial.ik_results.data[label].data
 
         if "Data" in ik_group:
             del ik_group["Data"]
@@ -261,8 +275,8 @@ class H5Handler:
         ik_group.attrs["Metadata"] = str(metadata)  # Store metadata as a string representation
 
     def _save_id_results(self, h5f: h5py.File, trial: TrialData) -> None:
-        """Overwrite IK results datasets from trial.IKResults."""
-        if not trial.IDResults:
+        """Overwrite ID results datasets from trial.id_results."""
+        if not trial.id_results:
             return
 
         if 'IDResults' not in h5f.keys():
@@ -271,16 +285,16 @@ class H5Handler:
             id_group.attrs["NumSamples"] = 0
 
         existing_labels = self._decode_labels(id_group.attrs.get("Labels", []))
-        ordered = existing_labels + [l for l in trial.IDResults if l not in existing_labels]
-        sample_id = next(iter(trial.IDResults.values()))
+        ordered = existing_labels + [l for l in trial.id_results.data if l not in existing_labels]
+        sample_id = next(iter(trial.id_results.values()))
         n_samples = len(sample_id.data)
         time = sample_id.time
         
         data = np.zeros((len(ordered), n_samples), dtype=np.float64)
         data[0] = time  # First row is time
         for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
-            if label in trial.IDResults:
-                data[i] = trial.IDResults[label].data
+            if label in trial.id_results.data:
+                data[i] = trial.id_results.data[label].data
 
         if "Data" in id_group:
             del id_group["Data"]
@@ -427,55 +441,59 @@ class H5Handler:
     def _load_ik_results(self, h5f: h5py.File) -> Dict[str, Data]:
         """Parse and load IK results to container."""
         import ast 
-        ik_results: Dict[str, Data] = {}
         ik_group = h5f.get("IKResults")
         if ik_group is None:
-            return ik_results
+            return IKResults(name=self.trial_name, data={}, metadata={}, unit='rad')
 
         labels = self._decode_labels(ik_group.attrs.get("Labels", []))
         if not labels:
-            return ik_results
+            return IKResults(name=self.trial_name, data={}, metadata={}, unit='rad')
 
         data = ik_group["Data"][:]  # shape: (n_channels, n_samples)
         time = ik_group["Data"][0,:]  # First row is time
         metadata = ast.literal_eval(ik_group.attrs.get("Metadata", "{}"))  # Convert string representation back to dictionary
         inDegrees = metadata.get("inDegrees", None)
+        data_dict = {}
         for i, label in enumerate(labels):
-            ik_results[label] = Data(
+            if label == 'time':
+                continue  # Skip the time label, as it's already stored separately
+            data_dict[label] = Data(
                 name=label,
                 data=data[i],
-                unit="rad" if not inDegrees else "deg",
+                unit = 'deg' if inDegrees == 'yes' else 'rad',
                 time = time,
-                metadata=metadata,
-            )
+                )
 
-        return ik_results
+        return IKResults(name=self.trial_name, time=time, data=data_dict, metadata=metadata, unit='deg' if inDegrees == 'yes' else 'rad')
 
     def _load_id_results(self, h5f: h5py.File) -> Dict[str, Data]:
-        """Parse and load IK results to container."""
+        """Parse and load ID results to container."""
         import ast 
-        ik_results: Dict[str, Data] = {}
-        ik_group = h5f.get("IK")
-        if ik_group is None:
-            return ik_results
+        id_group = h5f.get("IDResults")
+        if id_group is None:
+            return IDResults(name=self.trial_name, data={}, metadata={}, unit='rad')
 
-        labels = self._decode_labels(ik_group.attrs.get("Labels", []))
+        labels = self._decode_labels(id_group.attrs.get("Labels", []))
         if not labels:
-            return ik_results
+            return IDResults(name=self.trial_name, data={}, metadata={}, unit='rad')
 
-        data = ik_group["Data"][:]  # shape: (n_channels, n_samples)
-        time = ik_group["Data"][0,:]  # First row is time
-        metadata = ast.literal_eval(ik_group.attrs.get("Metadata", "{}"))  # Convert string representation back to dictionary
+        data = id_group["Data"][:]  # shape: (n_channels, n_samples)
+        time = id_group["Data"][0,:]  # First row is time
+        metadata = ast.literal_eval(id_group.attrs.get("Metadata", "{}"))  # Convert string representation back to dictionary
+        unit = metadata.get("unit", None)
+        data_dict = {}
         for i, label in enumerate(labels):
-            ik_results[label] = Data(
+            if label == 'time':
+                continue  # Skip the time label, as it's already stored separately
+            data_dict[label] = Data(
                 name=label,
                 data=data[i],
-                unit="",
+                unit=unit,
                 time = time,
                 metadata=metadata,
             )
 
-        return ik_results
+        return IDResults(name=self.trial_name, time=time, data=data_dict, metadata=metadata, unit=unit)
 
     def _load_forces(self, h5f: h5py.File) -> Dict[str, ForceData]:
         """Parse force plate groups into {name: ForceData}."""
@@ -490,14 +508,24 @@ class H5Handler:
             if isinstance(name, bytes):
                 name = name.decode()
 
-            force  = plate["Force"][:]   # (n_samples, 3)
-            moment = plate["Moment"][:]  # (n_samples, 3)
-            cop    = plate["COP"][:]     # (n_samples, 3)
-            location = plate["Location"][:]
-            position = plate["Position"][:]
-            rotation = plate["Rotation"][:]
-            offset = plate["Offset"][:]
-            Tz = plate["Tz"][:]
+            force = plate["Force"][:]
+            n_samples = force.shape[1]
+
+            moment = plate["Moment"][:] if "Moment" in plate else np.zeros_like(force)
+            cop = plate["COP"][:] if "COP" in plate else np.zeros_like(force)
+            location = (plate["Location"][:]
+                        if "Location" in plate
+                        else np.zeros((3, 4, n_samples)))
+            position = (plate["Position"][:]
+                        if "Position" in plate
+                        else np.zeros((3, n_samples)))
+            rotation = (plate["Rotation"][:]
+                        if "Rotation" in plate
+                        else np.zeros((3, 3, n_samples)))
+            offset = (plate["Offset"][:]
+                      if "Offset" in plate
+                      else np.zeros((3, 1)))
+            Tz = (plate["Tz"][:] if "Tz" in plate else np.zeros(n_samples))
 
             sampling_rate = plate.attrs.get("SamplingFrequency")
             if sampling_rate is not None:

@@ -30,8 +30,8 @@ def test_analog_data_construction():
 def test_trial_data_construction():
     x = np.ones(100)
     marker = MarkerData(name="M1", x=x, y=x, z=x, sampling_rate=100.0)
-    trial = TrialData(trial_name="test_trial", markers={"M1": marker})
-    assert trial.trial_name == "test_trial"
+    trial = TrialData(name="test_trial", markers={"M1": marker})
+    assert trial.name == "test_trial"
     assert "M1" in trial.markers
 
 

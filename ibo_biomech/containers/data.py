@@ -120,7 +120,7 @@ class Data:
     def __array__(self):
         """Allow the object to be converted to a NumPy array."""
         return self.data
-
+    
     def __getitem__(self, index):
         """Allow indexing into the data."""
         return self.data[index]
@@ -204,7 +204,3 @@ class Data:
                 unit=self.unit,
                 time=self.time
             )
-
-    def __getattr__(self, name):
-        """Allow access to attributes of the underlying data array."""
-        return getattr(self.data, name)

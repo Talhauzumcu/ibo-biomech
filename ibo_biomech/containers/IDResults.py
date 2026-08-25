@@ -13,6 +13,7 @@ class IDResults:
     filepath : str = None
     unit: str = ""
     data: Dict[str, Data] = field(default_factory=dict)
+    time: np.ndarray = field(default_factory=lambda: np.array([]))
     metadata: Optional[Dict[str, str]] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -95,4 +96,6 @@ class IDResults:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
 
-    
+    def __len__(self):
+        """Return the number of samples in the data."""
+        return len(self.data.keys())

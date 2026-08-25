@@ -6,4 +6,5 @@ from .trialData import TrialData
 from .subject import Subject
 from .emgData import EMGData
 from .IKResults import IKResults
+from .IDResults import IDResults
 from .data import Data

@@ -13,11 +13,14 @@ class IKResults:
     filepath : str = None
     unit: str = ""
     data: Dict[str, Data] = field(default_factory=dict)
+    time: np.ndarray = field(default_factory=lambda: np.array([]))
     metadata: Optional[Dict[str, str]] = field(default_factory=dict)
 
     def __post_init__(self):
         if self.filepath is not None:
             self.read(self.filepath)
+        if len(self.data.keys()) > 0:
+            self.columns = list(self.data.keys())
 
     def read(self, filepath: str):
         """
@@ -41,14 +44,14 @@ class IKResults:
         """
         non_angles = ['time', 'pelvis_tx', 'pelvis_ty', 'pelvis_tz']
         if self.unit.lower() == "rad":
-            for column in self.columns:
+            for column in self.data.values():
                 if column.unit != 'deg' and column.unit != 'rad':
                     print(f"Warning: Column '{column}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
                     continue
-                if column in non_angles:
+                if column.name in non_angles:
                     continue
-                data = self.data[column]
-                data.data = np.rad2deg(data.data)
+                column.data = np.rad2deg(column.data)
+                column.unit = 'deg'
             self.unit = "deg"
         else:
             print("Data is already in degrees or unit is not recognized.")
@@ -59,14 +62,14 @@ class IKResults:
         """
         non_angles = ['time', 'pelvis_tx', 'pelvis_ty', 'pelvis_tz']
         if self.unit.lower() == "deg":
-            for column in self.columns:
+            for column in self.data.values():
                 if column.unit != 'deg' and column.unit != 'rad':
                     print(f"Warning: Column '{column}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
                     continue
-                if column in non_angles:
+                if column.name in non_angles:
                     continue
-                data = self.data[column]
-                data.data = np.deg2rad(data.data)
+                column.data = np.deg2rad(column.data)
+                column.unit = 'rad'
             self.unit = "rad"
         else:
             print("Data is already in radians or unit is not recognized.")
@@ -133,4 +136,6 @@ class IKResults:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
 
-    
+    def __len__(self):
+        """Return the number of samples in the data."""
+        return len(self.data.keys())

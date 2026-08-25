@@ -18,7 +18,13 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
 ]
-dependencies = ["numpy", "h5py", "ezc3d", "scipy"]
+dependencies = [
+    "numpy",
+    "h5py",
+    "ezc3d",
+    "scipy",
+    "pandas>=2.3.3",
+]
 
 [project.optional-dependencies]
 docs = ["sphinx", "sphinx-rtd-theme", "myst-parser"]
