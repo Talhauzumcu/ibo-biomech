@@ -14,6 +14,8 @@ from .markerData import MarkerData
 from .analogData import AnalogData
 from .emgData import EMGData
 from .data import Data
+from .IKResults import IKResults
+from .IDResults import IDResults
 import pandas as pd
 
 @dataclass
@@ -40,9 +42,9 @@ class TrialData:
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
     emgs: Dict[str, EMGData] = field(default_factory=dict)
-    IKResults: Dict[str, Data] = field(default_factory=dict)
-    IDResults: Dict[str, Data] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
+    IKResults = None
+    IDResults = None
 
     def __post_init__(self):
         """Cache convenience attributes (labels and sampling rates)."""
@@ -72,38 +74,21 @@ class TrialData:
                 )
                 self.emgs[analog.name] = emg
 
-    def attach_IK_results(self, ik_results_file: str) -> None:
+    def attach_IK_results(self, ikresults_file: str) -> None:
         """Attach inverse kinematics results to the trial.
 
         Args:
             ik_results_file: Path to the IK results file.
         """
-        ik_results = read_sto(ik_results_file)
-        metadata = ik_results.get("metadata", {})
-        inDegrees = metadata.get("inDegrees", None)
-        for key, value in ik_results.items():
-            if key != "time" and key != "metadata":
-                self.IKResults[key] = Data(name=key, 
-                                           data=value, 
-                                           unit="rad" if not inDegrees else "deg", 
-                                           time=ik_results["time"],
-                                           metadata=metadata)
+        self.IKResults = IKResults(filepath=ikresults_file)
 
-    def attach_ID_results(self, id_results_file: str) -> None:
+    def attach_ID_results(self, idresults_file: str) -> None:
             """Attach inverse dynamics results to the trial.
 
             Args:
                 id_results_file: Path to the ID results file.
             """
-            id_results = read_sto(id_results_file)
-            metadata = id_results.get("metadata", {})
-            for key, value in id_results.items():
-                if key != "time" and key != "metadata":
-                    self.IDResults[key] = Data(name=key, 
-                                               data=value, 
-                                               unit="", 
-                                               time=id_results["time"],
-                                               metadata=metadata)
+            self.IDResults = IDResults(filepath=idresults_file)
 
     def rotate_markers(self, axis: str, angle_deg: float) -> None:
         """Rotate every marker about an axis in place.
@@ -229,6 +214,30 @@ class TrialData:
         """
         self.markers[marker_data.name] = marker_data
 
+    def add_force(self, force_data: ForceData) -> None:
+        """Add (or replace) a force plate, keyed by its name.
+
+        Args:
+            force_data: The force plate to store.
+        """
+        self.forces[force_data.name] = force_data
+
+    def add_analog(self, analog_data: AnalogData) -> None:
+        """Add (or replace) an analog channel, keyed by its name.
+
+        Args:
+            analog_data: The analog channel to store.
+        """
+        self.analogs[analog_data.name] = analog_data
+
+    def add_emg(self, emg_data: EMGData) -> None:
+        """Add (or replace) an EMG channel, keyed by its name.
+
+        Args:
+            emg_data: The EMG channel to store.
+        """
+        self.emgs[emg_data.name] = emg_data
+        
     def as_df(self, data_dict: Dict[str, Any], time_normalize=False) -> pd.DataFrame:
         """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include
         the metadata for easy plotting and analysis.

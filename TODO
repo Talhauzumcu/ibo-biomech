@@ -1,10 +1,7 @@
 
 #Croping is not considering different sampling rates. If forces are sampled at a higher freq they will get cut off very early.
-#Events from c3d need to be handled on c3d handler and also added to the fileconverter
-#Check out the labeled residual formatting
-#unlabaled trajectories need to be handled
-#Create new containers for opensim results. (There is an IKResults container in hto_analysis project. Can modify that and add)
-#Add methods such as add_force, add_emg etc similar to how add_marker works.
 #Trialdata cropping should consider IK and ID results
 #IK and ID data should have residual informations
 #Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?
+#Events from c3d need to be handled on c3d handler and also added to the fileconverter
+#unlabaled trajectories need to be handled
