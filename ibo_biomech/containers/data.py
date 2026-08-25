@@ -21,8 +21,19 @@ class Data:
     data: np.ndarray
     unit: str = ""
     time: Optional[np.ndarray] = None
+    sampling_rate: Optional[float] = None
     metadata: Optional[Dict[str, str]] = field(default_factory=dict)
-    
+
+    def __post_init__(self):
+        if self.time is not None:
+            if len(self.time) != len(self.data):
+                raise ValueError("Time vector length must match data length.")
+
+            if self._is_uniformly_sampled(self.time):
+                self.sampling_rate = 1 / np.mean(np.diff(self.time))
+            else:
+                self.sampling_rate = None
+
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop the signal in place to ``[start_idx, end_idx)``.
 
@@ -44,7 +55,12 @@ class Data:
         """
         from scipy.signal import butter, filtfilt
         if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
+            if self.time is not None:
+                if not self._is_uniformly_sampled(self.time):
+                    raise ValueError("Time vector is not uniformly sampled. Cannot compute sampling rate.")
+                self.sampling_rate = 1 / np.mean(np.diff(self.time))
+            else:
+                raise ValueError("Sampling rate or a uniform time vector must be set to apply low-pass filter.")
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
         self.data = filtfilt(b, a, self.data, axis=0)
 
@@ -60,7 +76,12 @@ class Data:
         """
         from scipy.signal import butter, filtfilt
         if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
+            if self.time is not None:
+                if not self._is_uniformly_sampled(self.time):
+                    raise ValueError("Time vector is not uniformly sampled. Cannot compute sampling rate.")
+                self.sampling_rate = 1 / np.mean(np.diff(self.time))
+            else:
+                raise ValueError("Sampling rate or a uniform time vector must be set to apply high-pass filter.")
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
         self.data = filtfilt(b, a, self.data, axis=0)
 
@@ -80,6 +101,11 @@ class Data:
         plt.title(f'Analog Signal: {self.name}')
         plt.show()
 
+    def _is_uniformly_sampled(self, time: np.ndarray) -> bool:
+        """Check if the time vector is uniformly sampled."""
+        dt = np.diff(time)
+        return np.allclose(dt, dt[0], atol=1e-6)
+    
     def __repr__(self) -> str:
         """Return a concise summary of the data."""
         return (
@@ -91,4 +117,94 @@ class Data:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
 
-    
+    def __array__(self):
+        """Allow the object to be converted to a NumPy array."""
+        return self.data
+
+    def __getitem__(self, index):
+        """Allow indexing into the data."""
+        return self.data[index]
+
+    def __setitem__(self, index, value):
+        """Allow setting values in the data."""
+        self.data[index] = value
+
+    def __len__(self):
+        """Return the number of samples in the data."""
+        return len(self.data)
+
+    def __iter__(self):
+        """Allow iteration over the data."""
+        return iter(self.data)
+
+    def __add__(self, other):
+        """Allow addition with another Data object or a scalar."""
+        if isinstance(other, Data):
+            return Data(
+                name=self.name,
+                data=self.data + other.data,
+                unit=self.unit,
+                time=self.time
+            )
+        else:
+            return Data(
+                name=self.name,
+                data=self.data + other,
+                unit=self.unit,
+                time=self.time
+            )
+
+    def __sub__(self, other):
+        """Allow subtraction with another Data object or a scalar."""
+        if isinstance(other, Data):
+            return Data(
+                name=self.name,
+                data=self.data - other.data,
+                unit=self.unit,
+                time=self.time
+            )
+        else:
+            return Data(
+                name=self.name,
+                data=self.data - other,
+                unit=self.unit,
+                time=self.time
+            )
+
+    def __mul__(self, other):
+        """Allow multiplication with another Data object or a scalar."""
+        if isinstance(other, Data):
+            return Data(
+                name=self.name,
+                data=self.data * other.data,
+                unit=self.unit,
+                time=self.time
+            )
+        else:
+            return Data(
+                name=self.name,
+                data=self.data * other,
+                unit=self.unit,
+                time=self.time
+            )
+
+    def __truediv__(self, other):
+        """Allow division with another Data object or a scalar."""
+        if isinstance(other, Data):
+            return Data(
+                name=self.name,
+                data=self.data / other.data,
+                unit=self.unit,
+                time=self.time
+            )
+        else:
+            return Data(
+                name=self.name,
+                data=self.data / other,
+                unit=self.unit,
+                time=self.time
+            )
+
+    def __getattr__(self, name):
+        """Allow access to attributes of the underlying data array."""
+        return getattr(self.data, name)

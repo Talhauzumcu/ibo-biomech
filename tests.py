@@ -83,3 +83,7 @@ OsimHandler.run_id(model_path=model,
                    final_time=1)
 
 # %%
+from ibo_biomech.utils.utils import *
+from ibo_biomech import IKResults
+filepath = Path('./test_output/test_output_IK.mot')
+ikresults = IKResults(filepath=filepath)

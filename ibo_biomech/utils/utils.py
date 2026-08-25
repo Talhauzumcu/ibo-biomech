@@ -211,7 +211,8 @@ def build_extloads(r_idx, output_file, mot_file=None, h5_file=None):
     Path(output_file).write_text(xml, encoding="utf-8")
     return output_file
 
-def read_storage(path):
+def read_storage(path: str) -> dict:
+    """Read an OpenSim .sto or .mot file and return its contents as a dictionary"""
     lines = Path(path).read_text(encoding="utf-8", errors="replace").splitlines()
     end = next(i for i, ln in enumerate(lines) if ln.strip().lower() == "endheader")
     metadata = {}
@@ -236,7 +237,7 @@ def read_storage(path):
 read_sto = read_storage  # alias for convenience
 read_mot = read_storage  # alias for convenience
 
-def read_trc(path):
+def read_trc(path: str):
     """Return (time, marker_fn, marker_names). marker_fn(name) -> (n,3) X,Y,Z array."""
     lines = Path(path).read_text(errors="replace").splitlines()
     names = lines[3].split("\t")                      # Frame#, Time, then 3 cols/marker

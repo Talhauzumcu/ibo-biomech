@@ -5,4 +5,5 @@ from .markerData import MarkerData
 from .trialData import TrialData
 from .subject import Subject
 from .emgData import EMGData
+from .IKResults import IKResults
 from .data import Data
