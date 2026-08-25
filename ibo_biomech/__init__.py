@@ -11,4 +11,4 @@ from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, T
 from ibo_biomech.handlers import C3DHandler, H5Handler
 from ibo_biomech.analysis import GaitAnalyzer
 
-__version__ = "0.2.9"
+__version__ = "0.2.10"
