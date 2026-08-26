@@ -67,6 +67,7 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else ikTool.getOutputMotionFileName()
+        output_file = output_file.resolve() if isinstance(output_file, Path) else Path(output_file).resolve()
         log_file = log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         trc_file = trc_file if trc_file else ikTool.getMarkerDataFileName()
         trc_file = str(Path(trc_file).resolve())
@@ -100,6 +101,8 @@ class OsimHandler:
         if temp_trc_created and trc_file and os.path.exists(trc_file):
             os.remove(trc_file)  # Clean up the temporary TRC file if it was created from HDF5
 
+        return str(Path(output_file).resolve())
+    
     @staticmethod
     def run_scaling(model_path: str, 
                     setup_file: str,
@@ -153,6 +156,7 @@ class OsimHandler:
         setup_file = Path(setup_file).resolve()
         scalingTool = osim.ScaleTool(str(setup_file))
         output_file = output_file if output_file is not None else scalingTool.getModelScaler().getOutputModelFileName()
+        output_file = output_file.resolve() if isinstance(output_file, Path) else Path(output_file).resolve()
         log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         mass = mass if mass is not None else scalingTool.getSubjectMass()
         height = height if height is not None else scalingTool.getSubjectHeight()
@@ -198,7 +202,7 @@ class OsimHandler:
         osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
         if temp_trc_created and trc_file and os.path.exists(trc_file):
             os.remove(trc_file)
-        return output_file
+        return str(Path(output_file).resolve())
 
     @staticmethod
     def run_id(model_path: str, 
@@ -239,7 +243,7 @@ class OsimHandler:
         if external_loads_file is None:
             raise ValueError("a valid external_loads_file must be provided.")
         
-        model = osim.Model(str(model_path))
+        model = osim.Model(str(Path(model_path).resolve()))
         model.initSystem()
         setup_file = Path(setup_file).resolve()
 
@@ -247,9 +251,12 @@ class OsimHandler:
         
         #Get the variables from setup if not provided to the function
         output_file = output_file if output_file else idTool.getOutputGenForceFileName()
+        output_file = output_file.resolve() if isinstance(output_file, Path) else Path(output_file).resolve()
         log_file = log_file = log_file if log_file is not None else str(Path(output_file).with_suffix('.log'))
         mot_file = mot_file if mot_file else idTool.getCoordinatesFileName()
+        mot_file = Path(mot_file).resolve()
         external_loads_file = external_loads_file if external_loads_file else idTool.getExternalLoadsFileName()
+        external_loads_file = Path(external_loads_file).resolve()
         
         if initial_time is None or final_time is None:
             d = read_storage(mot_file)
@@ -276,7 +283,7 @@ class OsimHandler:
         idTool.run()
 
         osim.Logger.removeFileSink()  # Clean up logger to prevent issues with subsequent runs
-        return output_file
+        return str(Path(output_file).resolve())
     
     @staticmethod
     def _trc_from_h5(h5_file: str):

@@ -1,10 +1,3 @@
-
-#have a common "time" information for each data field and keep it synchronized?
-    #h5s will include the Time information as a dataset. DONE
-    #time cropping will be allowed. But should be synched everywhere. there are trc and mot exports that don't do this right not that needs fixing. DONE
-    #When loading containers this time vector should be assinged. both h5Handler and c3dHandler should take care of this. DONE
-    #All containers need a (optional) time vector array DONE
-    #Make sure saving is also taking care of time
 #IK and ID data should have residual informations
 #Force plate data regarding, location, rotation, position etc is not properly handled (because I don't know what is meant.)
 #Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?

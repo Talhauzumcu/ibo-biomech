@@ -180,6 +180,7 @@ def build_extloads(r_idx, output_file, mot_file=None, h5_file=None):
         from ibo_biomech import FileConverter
         mot_file = h5_file.replace('.h5', '.mot')
         mot_file=FileConverter.h5_to_mot(h5_path=h5_file, mot_path=mot_file)
+    mot_file = Path(mot_file).resolve() if isinstance(mot_file, str) else Path(mot_file).resolve()
     _EXTFORCE = """\t\t\t<ExternalForce name="{name}">
     \t\t\t\t<applied_to_body>{body}</applied_to_body>
     \t\t\t\t<force_expressed_in_body>ground</force_expressed_in_body>
@@ -207,7 +208,7 @@ def build_extloads(r_idx, output_file, mot_file=None, h5_file=None):
         '</OpenSimDocument>\n'
     )
     Path(output_file).write_text(xml, encoding="utf-8")
-    return output_file
+    return output_file.resolve() if isinstance(output_file, Path) else Path(output_file).resolve()
 
 def read_storage(path: str) -> dict:
     """Read an OpenSim .sto or .mot file and return its contents as a dictionary"""
