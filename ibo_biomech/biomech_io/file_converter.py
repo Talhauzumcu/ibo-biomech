@@ -79,6 +79,10 @@ class FileConverter:
         else:
             analog_data = np.empty((0, 0), dtype=np.float64)
 
+        #Create a time vector for all data types. 
+        analog_time = np.arange(num_samples) / analog_rate if num_channels > 0 else np.empty((0,), dtype=np.float64)
+        marker_time = np.arange(num_frames) / marker_rate
+
         with h5py.File(h5_path, "w") as h5f:
             meta_group = h5f.create_group("MetaData")
             meta_group.attrs["PathFile"] = c3d_path
@@ -112,11 +116,13 @@ class FileConverter:
             labeled_group.create_dataset("Data", data=labeled_data, compression="gzip")
             labeled_group.create_dataset("Type", data=labeled_type, compression="gzip")
             labeled_group.create_dataset("Residuals", data=labeled_residuals, compression="gzip")
+            labeled_group.create_dataset("Time", data=marker_time, compression="gzip")
 
             unlabeled_group = traj_group.create_group("Unlabeled")
             unlabeled_group.attrs["NumUnlabeled"] = 0
             unlabeled_group.create_dataset("Data", data=unlabeled_data, compression="gzip")
             unlabeled_group.create_dataset("Type", data=unlabeled_type, compression="gzip")
+            unlabeled_group.create_dataset("Time", data=marker_time, compression="gzip")
 
             analog_group = h5f.create_group("Analog")
             analog_group.attrs["BoardName"] = ""
@@ -128,6 +134,7 @@ class FileConverter:
             analog_group.attrs["NumSamples"] = num_samples if num_channels > 0 else None
             analog_group.create_dataset("Data", data=analog_data, compression="gzip")
             analog_group.attrs["Labels"] = analog_labels
+            analog_group.create_dataset("Time", data=analog_time, compression="gzip")
 
             fp_group = h5f.create_group("ForcePlates")
             for i, (name, fp_data) in enumerate(handler.forces.items()):
@@ -138,7 +145,7 @@ class FileConverter:
                 plate_group.attrs['unit_position'] = fp_data.metadata.get("unit_position") if fp_data.metadata else "Unknown"
                 plate_group.attrs['origin'] = fp_data.metadata.get("origin") if fp_data.metadata else 0.0
                 plate_group.attrs['Name'] = name
-                numSamples = fp_data.force.shape[0]
+                numSamples = fp_data.force.shape[1]
                 plate_group.attrs['NumSamples'] = numSamples
                 plate_group.attrs['SamplingFrequency'] = fp_data.sampling_rate
 
@@ -151,16 +158,17 @@ class FileConverter:
                 plate_group.create_dataset("Force", data=fp_data.force, compression="gzip")
                 plate_group.create_dataset("Moment", data=fp_data.moment, compression="gzip")
                 plate_group.create_dataset('Tz', data=fp_data.Tz, compression="gzip")
+                plate_group.create_dataset('Time', data=analog_time, compression="gzip")
                 corners = fp_data.metadata.get("corners") if fp_data.metadata else None
                 if corners is not None and num_frames > 0:
-                    location = np.repeat(corners[:, :, np.newaxis], num_frames, axis=2)
+                    location = np.repeat(corners[:, :, np.newaxis], numSamples, axis=2)
                 else:
                     location = None
                 plate_group.create_dataset("Location", data=location, compression="gzip")
 
                 origin = fp_data.metadata.get("origin") if fp_data.metadata else None
                 if origin is not None and num_frames > 0:
-                    position = np.zeros((3, num_frames), dtype=np.float64)
+                    position = np.zeros((3, numSamples), dtype=np.float64)
                     position[0:3, :] = np.asarray(origin, dtype=np.float64).reshape(3, 1)
                 else:
                     position = None
@@ -196,7 +204,7 @@ class FileConverter:
         h5h = H5Handler(h5_path)
         trial = h5h.load_data()
         trial.rotate_markers(axis, angle)
-
+        time = next(iter(trial.markers.values())).time if trial.markers else None
         if convert_to_meters:
             trial.convert_marker_units('m')
         header_dict = {
@@ -211,7 +219,7 @@ class FileConverter:
         'marker_labels': trial.marker_labels
         }
                 
-        write_trc(trc_path, header_dict, trial.markers)
+        write_trc(trc_path, header_dict, trial.markers, time=time)
         return trc_path
 
     @staticmethod
@@ -255,11 +263,11 @@ class FileConverter:
         h5h = H5Handler(h5_path)
         trial = h5h.load_data()
         trial.rotate_forces(axis, angle)
+        time = next(iter(trial.forces.values())).time if trial.forces else None
         if convert_to_meters:
             trial.convert_force_units('m') #c3d data is often saved as mm and Nmm.
 
-        write_mot(mot_path, trial.forces)
-        print(mot_path)
+        write_mot(mot_path, trial.forces, time=time)
         return mot_path
     
     @staticmethod

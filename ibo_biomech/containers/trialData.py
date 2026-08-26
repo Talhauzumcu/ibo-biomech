@@ -40,10 +40,10 @@ class TrialData:
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
-    emgs: Dict[str, EMGData] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
-    ik_results: IKResults = field(default=None, repr=False)
-    id_results: IDResults = field(default=None, repr=False)
+    emgs: Optional[Dict[str, EMGData]] = None
+    ik_results: Optional[IKResults] = None
+    id_results: Optional[IDResults] = None
 
     def __post_init__(self):
         """Cache convenience attributes (labels and sampling rates)."""
@@ -136,34 +136,64 @@ class TrialData:
         for force in self.forces.values():
             force.rotate(axis, angle_deg)
 
-    def crop(self, start_idx: int, end_idx: int) -> None:
-        """Crop every marker, analog and force channel to the same index range.
+    ### These higher level functions seem to cause problems. 
+    ### For example when the sampling rates are different cropping will not work.
+    ### They should be handled specific to each container when wished. So that corresponding indexes can be manually calculated
+    # def crop(self, start_idx: int, end_idx: int) -> None:
+    #     """Crop every marker, analog and force channel to the same index range.
+
+    #     Args:
+    #         start_idx: First sample index to keep.
+    #         end_idx: First sample index to drop (exclusive).
+    #     """
+    #     for marker in self.markers.values():
+    #         marker.crop(start_idx, end_idx)
+    #     for analog in self.analogs.values():
+    #         analog.crop(start_idx, end_idx)
+    #     for force in self.forces.values():
+    #         force.crop(start_idx, end_idx)
+    #     for emg in self.emgs.values():
+    #         emg.crop(start_idx, end_idx)
+
+    # def lowpass_filter(self, cutoff_marker: float, cutoff_analog: float, cutoff_force: float, order: int = 4) -> None:
+    #     """Low-pass filter markers, analogs and forces with separate cutoffs.
+
+    #     Args:
+    #         cutoff_marker: Cutoff for markers in Hz.
+    #         cutoff_analog: Cutoff for analog channels in Hz.
+    #         cutoff_force: Cutoff for force plates in Hz.
+    #         order: Filter order applied to all. Defaults to 4.
+    #     """
+    #     self.lowpass_filter_markers(cutoff_marker, order)
+    #     self.lowpass_filter_analogs(cutoff_analog, order)
+    #     self.lowpass_filter_forces(cutoff_force, order)
+
+    def crop(self, data_type: str, start_idx: int, end_idx: int) -> None:
+        """Crop a specific data type to the same index range.
 
         Args:
+            data_type: Type of data to crop ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results').
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-        for marker in self.markers.values():
-            marker.crop(start_idx, end_idx)
-        for analog in self.analogs.values():
-            analog.crop(start_idx, end_idx)
-        for force in self.forces.values():
-            force.crop(start_idx, end_idx)
-        for emg in self.emgs.values():
-            emg.crop(start_idx, end_idx)
-
-    def lowpass_filter(self, cutoff_marker: float, cutoff_analog: float, cutoff_force: float, order: int = 4) -> None:
-        """Low-pass filter markers, analogs and forces with separate cutoffs.
-
-        Args:
-            cutoff_marker: Cutoff for markers in Hz.
-            cutoff_analog: Cutoff for analog channels in Hz.
-            cutoff_force: Cutoff for force plates in Hz.
-            order: Filter order applied to all. Defaults to 4.
-        """
-        self.lowpass_filter_markers(cutoff_marker, order)
-        self.lowpass_filter_analogs(cutoff_analog, order)
-        self.lowpass_filter_forces(cutoff_force, order)
+        if data_type == 'markers':
+            for marker in self.markers.values():
+                marker.crop(start_idx, end_idx)
+        elif data_type == 'analogs':
+            for analog in self.analogs.values():
+                analog.crop(start_idx, end_idx)
+        elif data_type == 'forces':
+            for force in self.forces.values():
+                force.crop(start_idx, end_idx)
+        elif data_type == 'emgs':
+            for emg in self.emgs.values():
+                emg.crop(start_idx, end_idx)
+        elif data_type == 'ik_results':
+            self.ik_results.crop(start_idx, end_idx)
+        elif data_type == 'id_results':
+            self.id_results.crop(start_idx, end_idx)
+        else:
+            raise ValueError(f"Unknown data type '{data_type}'. Must be one of: 'markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results'.")
 
     def lowpass_filter_markers(self, cutoff_freq: float, order: int = 4) -> None:
         """Low-pass filter every marker in place.

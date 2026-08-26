@@ -19,6 +19,8 @@ class IDResults:
     def __post_init__(self):
         if self.filepath is not None:
             self.read(self.filepath)
+        if len(self.data.keys()) > 0:
+            self.columns = list(self.data.keys())
 
     def read(self, filepath: str):
         """
@@ -35,7 +37,42 @@ class IDResults:
                                      data=mot_data[column],
                                      unit = self.unit,
                                      time = self.time)
+
+    def highpass_filter(self, cutoff: float, order: int = 4) -> None:
+            """Apply a zero-phase high-pass Butterworth filter to force, moment and CoP.
+    
+            Args:
+                cutoff: Cutoff frequency in Hz.
+                order: Filter order. Defaults to 4.
+            """
+            for data in self.data.values():
+                data.highpass_filter(cutoff, order)
+    
+    def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
+        """Apply a zero-phase low-pass Butterworth filter to force, moment and CoP.
+
+        Args:
+            cutoff: Cutoff frequency in Hz.
+            order: Filter order. Defaults to 4.
+        """
+        for data in self.data.values():
+            data.lowpass_filter(cutoff, order)
+
+    def crop(self, start_idx: int, end_idx: int) -> None:
+        """Crop the signal in place to ``[start_idx, end_idx)``.
+
+        Args:
+            start_idx: First sample index to keep.
+            end_idx: First sample index to drop (exclusive).
+        """
+
+        if start_idx < 0 or end_idx > len(self.time) or start_idx >= end_idx:
+            raise ValueError("Invalid crop indices.")
         
+        self.time = self.time[start_idx:end_idx] 
+        for data in self.data.values():
+            data.crop(start_idx, end_idx)
+            
     def write(self, filepath: str):
         """
         Writes the ID results to a .mot file.

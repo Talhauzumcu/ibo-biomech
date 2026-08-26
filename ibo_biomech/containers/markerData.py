@@ -32,8 +32,13 @@ class MarkerData:
     z: np.ndarray = field(default_factory=lambda: np.zeros(1))
     unit: str = 'mm'
     sampling_rate: float = None
+    time: Optional[np.ndarray] = None
     virtual: int = 0 #Whether the marker is virtual or measured.
 
+    def __post_init__(self):
+        if self.time is None and self.sampling_rate is not None:
+            self.time = np.arange(len(self.x)) / self.sampling_rate
+            
     def get_trajectory(self) -> np.ndarray:
         """Return the trajectory stacked as a single array.
 
@@ -104,9 +109,13 @@ class MarkerData:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
+        if start_idx < 0 or end_idx > len(self.x) or start_idx >= end_idx:
+            raise ValueError("Invalid crop indices.")
+        
         self.x=self.x[start_idx:end_idx]
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
+        self.time = self.time[start_idx:end_idx] if self.time is not None else None
 
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate the trajectory in place about a coordinate axis.
@@ -152,7 +161,8 @@ class MarkerData:
     def plot(self) -> None:
         """Plot the X, Y and Z trajectories against time in a single figure."""
         import matplotlib.pyplot as plt
-        time = np.arange(len(self.x)) / self.sampling_rate if self.sampling_rate else np.arange(len(self.x))
+        time = self.time if self.time is not None else np.arange(self.x.shape[0]) / self.sampling_rate if \
+                                                         self.sampling_rate else np.arange(self.x.shape[0])
 
         plt.figure(figsize=(12, 8))
         plt.plot(time, self.get_trajectory().T)

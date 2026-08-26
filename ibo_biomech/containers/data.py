@@ -34,6 +34,9 @@ class Data:
             else:
                 self.sampling_rate = None
 
+        if self.time is None and self.sampling_rate is not None:
+            self.time = np.arange(len(self.data)) / self.sampling_rate
+
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop the signal in place to ``[start_idx, end_idx)``.
 
@@ -41,7 +44,10 @@ class Data:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
+        if start_idx < 0 or end_idx > len(self.data) or start_idx >= end_idx:
+            raise ValueError("Invalid crop indices.")
         self.data = self.data[start_idx:end_idx]
+        self.time = self.time[start_idx:end_idx] if self.time is not None else None
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter in place.
@@ -89,11 +95,7 @@ class Data:
         """Plot the signal against time."""
         import matplotlib.pyplot as plt
 
-        if self.time is not None:
-            time = self.time
-        else:
-            time = np.arange(self.data.shape[0]) / self.sampling_rate if self.sampling_rate else np.arange(self.data.shape[0])
-
+        time = self.time if self.time is not None else np.arange(self.data.shape[0]) / self.sampling_rate if self.sampling_rate else np.arange(self.data.shape[0])
         plt.figure(figsize=(12, 6))
         plt.plot(time, self.data)
         plt.xlabel('Time (s)')

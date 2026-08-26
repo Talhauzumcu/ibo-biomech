@@ -26,10 +26,15 @@ class EMGData:
     """
     name: str
     data: np.ndarray
+    time: Optional[np.ndarray] = None
     sampling_rate: float = None
     unit: str = "unknown"
     channel: Optional[int] = None
 
+    def __post_init__(self):
+        if self.time is None and self.sampling_rate is not None:
+            self.time = np.arange(len(self.data)) / self.sampling_rate
+            
     def get_raw_data(self) -> np.ndarray:
         """Return the raw, unprocessed EMG samples.
 
@@ -148,7 +153,8 @@ class EMGData:
     def plot(self) -> None:
         """Plot the raw EMG signal against time."""
         import matplotlib.pyplot as plt
-        time = np.arange(self.data.shape[0]) / self.sampling_rate if self.sampling_rate else np.arange(self.data.shape[0])
+        time = self.time if self.time is not None else np.arange(self.data.shape[0]) / self.sampling_rate if \
+                                                         self.sampling_rate else np.arange(self.data.shape[0])
 
         plt.figure(figsize=(12, 6))
         plt.plot(time, self.data)
@@ -160,8 +166,9 @@ class EMGData:
     def plot_processed(self) -> None:
         """Plot the processed EMG envelope against time."""
         import matplotlib.pyplot as plt
-        time = np.arange(self.processed_data.shape[0]) / self.sampling_rate if self.sampling_rate else np.arange(self.processed_data.shape[0])
 
+        time = self.time if self.time is not None else np.arange(self.processed_data.shape[0]) / self.sampling_rate if \
+                                                        self.sampling_rate else np.arange(self.processed_data.shape[0])
         plt.figure(figsize=(12, 6))
         plt.plot(time, self.processed_data)
         plt.xlabel('Time (s)')
@@ -170,14 +177,20 @@ class EMGData:
         plt.show()
 
     def crop(self, start_idx: int, end_idx: int) -> None:
-            """Crop the signal in place to ``[start_idx, end_idx)``.
-    
-            Args:
-                start_idx: First sample index to keep.
-                end_idx: First sample index to drop (exclusive).
-            """
-            self.data = self.data[start_idx:end_idx]
-            
+        """Crop the signal in place to ``[start_idx, end_idx)``.
+
+        Args:
+            start_idx: First sample index to keep.
+            end_idx: First sample index to drop (exclusive).
+        """
+
+        if start_idx < 0 or end_idx > len(self.data) or start_idx >= end_idx:
+            raise ValueError("Invalid crop indices.")
+        
+        self.data = self.data[start_idx:end_idx]
+        self.time = self.time[start_idx:end_idx] if self.time is not None else None
+        self._processed_data = self._processed_data[start_idx:end_idx] if hasattr(self, '_processed_data') else None
+
     @property
     def processed_data(self) -> np.ndarray:
         """The processed EMG envelope, computed once and cached.

@@ -48,6 +48,7 @@ class ForceData:
     coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
+    time: Optional[np.ndarray] = None
 
     def __post_init__(self):
         """Clean NaNs, parse unit metadata and cache the sample count."""
@@ -56,6 +57,9 @@ class ForceData:
         self.num_samples = self.force.shape[1]
         assert self.force.shape[0] == 3, "Force array must have shape (3, n_samples)"
 
+        if self.time is None and self.sampling_rate is not None:
+            self.time = np.arange(self.num_samples) / self.sampling_rate
+            
     def _parse_metadata(self) -> None:
         """Populate ``unit_force``, ``unit_moment`` and ``unit_cop`` from metadata."""
         self.unit_force = self.metadata.get('unit_force', 'Unknown')
@@ -144,6 +148,7 @@ class ForceData:
         self.force = decimate(self.force, factor, axis=0, ftype='fir', zero_phase=True)
         self.moment = decimate(self.moment, factor, axis=0, ftype='fir', zero_phase=True)
         self.cop = decimate(self.cop, factor, axis=0, ftype='fir', zero_phase=True)
+        self._update_num_samples()
         if self.sampling_rate:
             self.sampling_rate /= factor
 
@@ -154,12 +159,18 @@ class ForceData:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
+        if start_idx < 0 or end_idx > self.num_samples or start_idx >= end_idx:
+            raise ValueError("Invalid crop indices.")
+        
         self.force = self.force[:, start_idx:end_idx]
         self.moment = self.moment[:, start_idx:end_idx]
         self.cop = self.cop[:, start_idx:end_idx]
         self.location = self.location[:, :, start_idx:end_idx]
         self.position = self.position[:, start_idx:end_idx]
         self.rotation = self.rotation[:, :, start_idx:end_idx]
+        self.Tz = self.Tz[start_idx:end_idx]
+        self.time = self.time[start_idx:end_idx] if self.time is not None else None
+        self._update_num_samples()
 
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate force, moment, CoP, position and orientation about an axis.
@@ -207,7 +218,9 @@ class ForceData:
     def plot(self) -> None:
         """Plot force, moment and centre of pressure against time in three subplots."""
         import matplotlib.pyplot as plt
-        time = np.arange(self.force.shape[1]) / self.sampling_rate if self.sampling_rate else np.arange(self.force.shape[1])
+        
+        time = self.time if self.time is not None else np.arange(self.force.shape[1]) / self.sampling_rate if \
+                                                         self.sampling_rate else np.arange(self.force.shape[1])
 
         plt.figure(figsize=(12, 8))
         plt.subplot(3, 1, 1)
@@ -304,6 +317,10 @@ class ForceData:
         """Return the force, moment and CoP as a single array of shape ``(9, n_samples)``."""
         return np.vstack((self.force, self.moment, self.cop))
 
+    def _update_num_samples(self) -> None:
+        """Update the cached number of samples based on the current data."""
+        self.num_samples = self.force.shape[1]
+        
     def __repr__(self) -> str:
         """Return a concise summary of the force plate's contents."""
         return (

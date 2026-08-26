@@ -48,7 +48,7 @@ def get_rotation_matrix(axis: str, angle_deg: float) -> np.ndarray:
         raise ValueError(f"Invalid axis: {axis}. Must be 'x', 'y', or 'z'.")
     
 
-def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> None:
+def write_trc(output_filepath: str, header_dict: dict, marker_data: dict, time: np.ndarray = None) -> None:
         """Write marker data to an OpenSim-compatible TRC file.
 
         Args:
@@ -69,7 +69,7 @@ def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> Non
         orig_data_start_frame = header_dict.get('orig_data_start_frame')
         orig_num_frames = header_dict.get('orig_num_frames')
         marker_labels = header_dict.get('marker_labels', [])
-        
+        time = time if time is not None else np.arange(num_frames) / data_rate
         with open(output_filepath, 'w') as f:
             f.write(f"PathFileType\t4\t(X/Y/Z)\t{os.path.abspath(output_filepath)}\n")            
             f.write("DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames\n")
@@ -86,8 +86,7 @@ def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> Non
             f.write("\n")
             
             for frame_idx in range(num_frames):
-                time = frame_idx / data_rate
-                line = f"{frame_idx + 1}\t{time}"
+                line = f"{frame_idx + 1}\t{time[frame_idx]}"
                 
                 for marker_name in marker_labels:
                     marker = marker_data[marker_name]
@@ -101,7 +100,7 @@ def write_trc(output_filepath: str, header_dict: dict, marker_data: dict) -> Non
         print(f"TRC file written to: {output_filepath}")
 
 
-def write_mot(output_filepath: str, forces: dict) -> None:
+def write_mot(output_filepath: str, forces: dict, time: np.ndarray = None) -> None:
         """Write force plate data to an OpenSim-compatible MOT file.
 
         Writes nine columns per plate: force (vx, vy, vz), centre of pressure
@@ -125,7 +124,7 @@ def write_mot(output_filepath: str, forces: dict) -> None:
         sampling_rate = first_force.sampling_rate if first_force.sampling_rate else 'Unknown'
         # Calculate number of columns: time + 9 columns per force plate (vx,vy,vz,px,py,pz,mx,my,mz)
         num_columns = 1 + (num_plates * 9)
-        
+        time = time if time is not None else np.arange(num_samples) / sampling_rate
         with open(output_filepath, 'w') as f:
             # Header
             f.write(f"nColumns={num_columns}\n")
@@ -145,8 +144,7 @@ def write_mot(output_filepath: str, forces: dict) -> None:
             # Data lines
             force_plates = list(forces.values())
             for sample_idx in range(num_samples):
-                time = sample_idx / sampling_rate
-                line = f"{time}"
+                line = f"{time[sample_idx]}"
                 
                 for plate in force_plates:
                     # Force vector (vx, vy, vz)

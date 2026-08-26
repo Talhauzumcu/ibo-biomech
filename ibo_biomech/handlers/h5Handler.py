@@ -178,15 +178,17 @@ class H5Handler:
 
         data = np.zeros((n_markers, 4, n_frames), dtype=np.float64)
         type_arr = np.ones((n_markers, n_frames), dtype=np.int8)
-
+        time = sample_marker.time if sample_marker.time is not None else np.zeros(n_frames, dtype=np.float64)
         for i, label in enumerate(ordered):
             if label in trial.markers:
                 data[i] = trial.markers[label].get_frame_trajectory()
 
         del labeled["Data"]
         del labeled["Type"]
+        del labeled["Time"]
         labeled.create_dataset("Data", data=data, compression="gzip")
         labeled.create_dataset("Type", data=type_arr, compression="gzip")
+        labeled.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         labeled.attrs["Labels"] = ordered
 
         traj = h5f["Trajectories"]
@@ -206,12 +208,15 @@ class H5Handler:
         n_samples = len(sample_analog.data)
 
         data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+        time = sample_analog.time if sample_analog.time is not None else np.zeros(n_samples, dtype=np.float64)
         for i, label in enumerate(ordered):
             if label in trial.analogs:
                 data[i] = trial.analogs[label].data
 
         del analog_group["Data"]
+        del analog_group['Time']
         analog_group.create_dataset("Data", data=data, compression="gzip")
+        analog_group.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         analog_group.attrs["Labels"] = ordered
         analog_group.attrs["NumSamples"] = n_samples
         analog_group.attrs["SamplingFrequency"] = sample_analog.sampling_rate
@@ -233,13 +238,18 @@ class H5Handler:
         n_samples = len(sample_emg.data)
 
         data = np.zeros((len(ordered), n_samples), dtype=np.float64)
+        time = sample_emg.time if sample_emg.time is not None else np.zeros(n_samples, dtype=np.float64)
         for i, label in enumerate(ordered):
             if label in trial.emgs:
                 data[i] = trial.emgs[label].data
 
         if "Data" in emg_group:
             del emg_group["Data"]
+        if "Time" in emg_group:
+            del emg_group["Time"]
+            
         emg_group.create_dataset("Data", data=data, compression="gzip")
+        emg_group.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         emg_group.attrs["Labels"] = ordered
         emg_group.attrs["NumSamples"] = n_samples
         emg_group.attrs["SamplingFrequency"] = sample_emg.sampling_rate
@@ -269,7 +279,10 @@ class H5Handler:
 
         if "Data" in ik_group:
             del ik_group["Data"]
+        if "Time" in ik_group:
+            del ik_group["Time"]
         ik_group.create_dataset("Data", data=data, compression="gzip")
+        ik_group.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         ik_group.attrs["Labels"] = ordered
         ik_group.attrs["NumSamples"] = n_samples
         ik_group.attrs["Metadata"] = str(metadata)  # Store metadata as a string representation
@@ -286,7 +299,7 @@ class H5Handler:
 
         existing_labels = self._decode_labels(id_group.attrs.get("Labels", []))
         ordered = existing_labels + [l for l in trial.id_results.data if l not in existing_labels]
-        sample_id = next(iter(trial.id_results.values()))
+        sample_id = next(iter(trial.id_results.data.values()))
         n_samples = len(sample_id.data)
         time = sample_id.time
         
@@ -298,7 +311,10 @@ class H5Handler:
 
         if "Data" in id_group:
             del id_group["Data"]
+        if "Time" in id_group:
+            del id_group["Time"]
         id_group.create_dataset("Data", data=data, compression="gzip")
+        id_group.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         id_group.attrs["Labels"] = ordered
         id_group.attrs["NumSamples"] = n_samples
         id_group.attrs["Metadata"] = str(sample_id.metadata)  # Store metadata as a string representation
@@ -345,7 +361,8 @@ class H5Handler:
                                   ("Position", fp_data.position),
                                   ("Rotation", fp_data.rotation),
                                   ("Offset", fp_data.offset),
-                                  ("Tz", fp_data.Tz)
+                                  ("Tz", fp_data.Tz),
+                                  ("Time", fp_data.time)
                                   ]:
                 if ds_name in plate:
                     del plate[ds_name]
@@ -369,7 +386,7 @@ class H5Handler:
 
         labels = self._decode_labels(labeled_group.attrs.get("Labels", []))
         data = labeled_group["Data"][:]  # shape: (n_markers, 4, n_frames)
-
+        time = labeled_group['Time'][:] if 'Time' in labeled_group else None  # Optional time dataset
         for i, label in enumerate(labels):
             trajectory = data[i]  # (4, n_frames)
             markers[label] = MarkerData(
@@ -378,6 +395,7 @@ class H5Handler:
                 y=trajectory[1],
                 z=trajectory[2],
                 sampling_rate=sampling_rate,
+                time=time
             )
 
         return markers
@@ -399,13 +417,14 @@ class H5Handler:
             return analogs
 
         data = analog_group["Data"][:]  # shape: (n_channels, n_samples)
-
+        time = analog_group['Time'][:] if 'Time' in analog_group else None  # Optional time dataset
         for i, label in enumerate(labels):
             analogs[label] = AnalogData(
                 name=label,
                 data=data[i],
                 sampling_rate=sampling_rate,
                 channel=i,
+                time=time
             )
 
         return analogs
@@ -427,6 +446,7 @@ class H5Handler:
             return emgs
 
         data = emg_group["Data"][:]  # shape: (n_channels, n_samples)
+        time = emg_group['Time'][:] if 'Time' in emg_group else None  # Optional time dataset
 
         for i, label in enumerate(labels):
             emgs[label] = EMGData(
@@ -434,6 +454,7 @@ class H5Handler:
                 data=data[i],
                 sampling_rate=sampling_rate,
                 channel=i,
+                time=time
             )
 
         return emgs
@@ -443,14 +464,14 @@ class H5Handler:
         import ast 
         ik_group = h5f.get("IKResults")
         if ik_group is None:
-            return IKResults(name=self.trial_name, data={}, metadata={}, unit='rad')
+            return None
 
         labels = self._decode_labels(ik_group.attrs.get("Labels", []))
         if not labels:
-            return IKResults(name=self.trial_name, data={}, metadata={}, unit='rad')
+            return None
 
         data = ik_group["Data"][:]  # shape: (n_channels, n_samples)
-        time = ik_group["Data"][0,:]  # First row is time
+        time = ik_group["Time"][:] if "Time" in ik_group else None  # Optional time dataset
         metadata = ast.literal_eval(ik_group.attrs.get("Metadata", "{}"))  # Convert string representation back to dictionary
         inDegrees = metadata.get("inDegrees", None)
         data_dict = {}
@@ -471,14 +492,14 @@ class H5Handler:
         import ast 
         id_group = h5f.get("IDResults")
         if id_group is None:
-            return IDResults(name=self.trial_name, data={}, metadata={}, unit='rad')
+            return None
 
         labels = self._decode_labels(id_group.attrs.get("Labels", []))
         if not labels:
-            return IDResults(name=self.trial_name, data={}, metadata={}, unit='rad')
+            return None
 
         data = id_group["Data"][:]  # shape: (n_channels, n_samples)
-        time = id_group["Data"][0,:]  # First row is time
+        time = id_group["Time"][:] if "Time" in id_group else None  # Optional time dataset
         metadata = ast.literal_eval(id_group.attrs.get("Metadata", "{}"))  # Convert string representation back to dictionary
         unit = metadata.get("unit", None)
         data_dict = {}
@@ -510,7 +531,7 @@ class H5Handler:
 
             force = plate["Force"][:]
             n_samples = force.shape[1]
-
+            time = plate["Time"][:] if "Time" in plate else None
             moment = plate["Moment"][:] if "Moment" in plate else np.zeros_like(force)
             cop = plate["COP"][:] if "COP" in plate else np.zeros_like(force)
             location = (plate["Location"][:]
@@ -550,6 +571,7 @@ class H5Handler:
                 metadata=metadata,
                 Tz = Tz,
                 sampling_rate=sampling_rate,
+                time=time
             )
 
         return forces
