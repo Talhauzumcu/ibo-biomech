@@ -19,8 +19,8 @@ class IDResults:
     def __post_init__(self):
         if self.filepath is not None:
             self.read(self.filepath)
-        if len(self.data.keys()) > 0:
-            self.columns = list(self.data.keys())
+
+        self.columns = list(self.data.keys())
 
     def read(self, filepath: str):
         """

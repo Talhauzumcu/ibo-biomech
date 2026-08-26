@@ -104,7 +104,9 @@ def write_mot(output_filepath: str, forces: dict, time: np.ndarray = None) -> No
         """Write force plate data to an OpenSim-compatible MOT file.
 
         Writes nine columns per plate: force (vx, vy, vz), centre of pressure
-        (px, py, pz) and moment (mx, my, mz).
+        (px, py, pz) and moment (mx, my, mz). 
+        WARNING: All moments except the y-component(Free moment) are set to zero. As during 
+        normal gait the vertical axis free moment is the only possible moment that can be generated.
 
         Args:
             output_filepath: Path for the output MOT file.

@@ -132,9 +132,9 @@ class ForceData:
         """
         force_magnitude = self.get_force_magnitude()
         low_force_indices = force_magnitude < threshold
-        self.force[low_force_indices] = 0
-        self.moment[low_force_indices] = 0
-        self.cop[low_force_indices] = 0
+        self.force[:, low_force_indices] = 0
+        self.moment[:, low_force_indices] = 0
+        self.cop[:, low_force_indices] = 0
 
     def downsample(self, factor: int) -> None:
         """Downsample force, moment and CoP in place using FIR decimation.
@@ -145,9 +145,9 @@ class ForceData:
             factor: Integer downsampling factor.
         """
         from scipy.signal import decimate
-        self.force = decimate(self.force, factor, axis=0, ftype='fir', zero_phase=True)
-        self.moment = decimate(self.moment, factor, axis=0, ftype='fir', zero_phase=True)
-        self.cop = decimate(self.cop, factor, axis=0, ftype='fir', zero_phase=True)
+        self.force = decimate(self.force, factor, axis=1, ftype='fir', zero_phase=True)
+        self.moment = decimate(self.moment, factor, axis=1, ftype='fir', zero_phase=True)
+        self.cop = decimate(self.cop, factor, axis=1, ftype='fir', zero_phase=True)
         self._update_num_samples()
         if self.sampling_rate:
             self.sampling_rate /= factor

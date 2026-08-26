@@ -231,6 +231,8 @@ class H5Handler:
             emg_group.attrs["Labels"] = []
             emg_group.attrs["NumSamples"] = 0
             emg_group.attrs["SamplingFrequency"] = 0.0
+        else:
+            emg_group = h5f["EMG"]
 
         existing_labels = self._decode_labels(emg_group.attrs.get("Labels", []))
         ordered = existing_labels + [l for l in trial.emgs if l not in existing_labels]
@@ -263,6 +265,8 @@ class H5Handler:
             ik_group = h5f.create_group("IKResults")
             ik_group.attrs["Labels"] = ['time']
             ik_group.attrs["NumSamples"] = 0
+        else:
+            ik_group = h5f["IKResults"]
 
         existing_labels = self._decode_labels(ik_group.attrs.get("Labels", []))
         ordered = existing_labels + [l for l in trial.ik_results.data if l not in existing_labels]
@@ -296,6 +300,8 @@ class H5Handler:
             id_group = h5f.create_group("IDResults")
             id_group.attrs["Labels"] = ['time']
             id_group.attrs["NumSamples"] = 0
+        else:
+            id_group = h5f["IDResults"]
 
         existing_labels = self._decode_labels(id_group.attrs.get("Labels", []))
         ordered = existing_labels + [l for l in trial.id_results.data if l not in existing_labels]
@@ -350,7 +356,7 @@ class H5Handler:
             else:
                 plate = fp_group[existing_by_name[fp_name]]
 
-            n_samples = fp_data.force.shape[0]
+            n_samples = fp_data.force.shape[1]
             plate.attrs["NumSamples"]       = n_samples
             plate.attrs["SamplingFrequency"] = fp_data.sampling_rate
 

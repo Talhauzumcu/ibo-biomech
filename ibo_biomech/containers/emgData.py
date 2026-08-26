@@ -34,7 +34,8 @@ class EMGData:
     def __post_init__(self):
         if self.time is None and self.sampling_rate is not None:
             self.time = np.arange(len(self.data)) / self.sampling_rate
-            
+        self._processed_data = None  # Cache for processed EMG envelope
+
     def get_raw_data(self) -> np.ndarray:
         """Return the raw, unprocessed EMG samples.
 
@@ -83,7 +84,7 @@ class EMGData:
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
         return filtfilt(b, a, signal, axis=0)
 
-    def lowpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
+    def lowpass_filter(self, cutoff: float, order: int = 4):
         """Lowpass filter the EMG data in place. 
 
         Args:
@@ -99,7 +100,7 @@ class EMGData:
         b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
         self.data = filtfilt(b, a, self.data, axis=0)
 
-    def highpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
+    def highpass_filter(self, cutoff: float, order: int = 4):
         """highpass filter the EMG data in place. 
 
         Args:
@@ -201,7 +202,7 @@ class EMGData:
         Returns:
             The processed, peak-normalised EMG envelope.
         """
-        if not hasattr(self, '_processed_data'):
+        if self._processed_data is None:
             self._processed_data = self.process_emg()
         return self._processed_data
 

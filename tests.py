@@ -113,10 +113,16 @@ trialdata.crop('ik_results', 50, 100)
 h5Handler.save_data(trialdata, 'test_wIK.h5')
 # %%
 from ibo_biomech import H5Handler, C3DHandler, IKResults
-h5Handler = H5Handler('./test_output/test_withIKID.h5')
+h5Handler = H5Handler('./example_data/test_h5.h5')
 trialdata = h5Handler.load_data()
-trialdata.id_results.data['knee_angle_r'][:] = 0
-trialdata.id_results.write('testwrite.sto')
+trialdata.attach_IK_results('./test_output/test_output_IK.mot')
+h5Handler.save_data(trialdata, 'test_wIK.h5')
+#%%
+from ibo_biomech import H5Handler, C3DHandler, IKResults
+h5Handler = H5Handler('test_wIK.h5')
+trialdata = h5Handler.load_data()
+trialdata.crop('ik_results', 50, 100)
+h5Handler.save_data(trialdata, 'test_wIK_cropped.h5')
 #%%
 from ibo_biomech import H5Handler, C3DHandler, IKResults
 ikresults = IKResults(filepath='testwrite.sto')

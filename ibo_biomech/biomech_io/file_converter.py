@@ -163,7 +163,7 @@ class FileConverter:
                 if corners is not None and num_frames > 0:
                     location = np.repeat(corners[:, :, np.newaxis], numSamples, axis=2)
                 else:
-                    location = None
+                    location = np.zeros((4, 3, numSamples), dtype=np.float64)
                 plate_group.create_dataset("Location", data=location, compression="gzip")
 
                 origin = fp_data.metadata.get("origin") if fp_data.metadata else None
@@ -171,7 +171,7 @@ class FileConverter:
                     position = np.zeros((3, numSamples), dtype=np.float64)
                     position[0:3, :] = np.asarray(origin, dtype=np.float64).reshape(3, 1)
                 else:
-                    position = None
+                    position = np.zeros((3, numSamples), dtype=np.float64)
                 
                 #Since c3d files don't hold these information, initial fileconversion uses static values. 
                 #These can be updated directly from the h5 file and resaved.

@@ -201,7 +201,8 @@ class MarkerData:
             y=self.y + other.y,
             z=self.z + other.z,
             sampling_rate=self.sampling_rate,
-            virtual = 1
+            virtual = 1,
+            unit=self.unit
         )
 
     def __truediv__(self, other: MarkerData | float | int) -> MarkerData:
@@ -228,7 +229,8 @@ class MarkerData:
                 y=self.y / other.y,
                 z=self.z / other.z,
                 sampling_rate=self.sampling_rate,
-                virtual=1
+                virtual=1,
+                unit=self.unit
             )
         elif isinstance(other, (float, int)):
             if other == 0:
@@ -239,7 +241,8 @@ class MarkerData:
                 y=self.y / other,
                 z=self.z / other,
                 sampling_rate=self.sampling_rate,
-                virtual=1
+                virtual=1,
+                unit=self.unit
             )
         return NotImplemented
 

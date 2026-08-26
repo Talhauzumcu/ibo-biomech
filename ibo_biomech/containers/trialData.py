@@ -40,8 +40,8 @@ class TrialData:
     markers: Dict[str, MarkerData] = field(default_factory=dict)
     analogs: Dict[str, AnalogData] = field(default_factory=dict)
     forces: Dict[str, ForceData] = field(default_factory=dict)
+    emgs: Dict[str, EMGData] = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
-    emgs: Optional[Dict[str, EMGData]] = None
     ik_results: Optional[IKResults] = None
     id_results: Optional[IDResults] = None
 
@@ -396,8 +396,8 @@ class TrialData:
         return (
             f"TrialData(name={self.name!r}, markers={len(self.markers)}, "
             f"analogs={len(self.analogs)}, forces={len(self.forces)}, "
-            f"emgs={emgs}, IK Results={ik_results}," 
-            f"ID Results={id_results})"
+            f"emgs={emgs}, ik_results={ik_results}," 
+            f"id_results={id_results})"
         )
 
     def __str__(self) -> str:

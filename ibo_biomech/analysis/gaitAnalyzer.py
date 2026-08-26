@@ -92,8 +92,14 @@ class GaitAnalyzer:
 
         # if no contacts detected
         if len(Times) == 0:
-            # mimic MATLAB "error" behaviour by returning None
-            return None, None, None, None
+            return {
+                "plateNames": None,
+                "feet": None,
+                "TDa": None,
+                "TOa": None,
+                "TDv": None,
+                "TOv": None
+            }
 
         # sort everything by time
         sort_order = np.argsort(Times)

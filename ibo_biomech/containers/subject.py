@@ -114,8 +114,7 @@ class Subject:
         Does not save the df to the instance since it can be ambiguous regarding data type (IKResults, marker data, etc.) and can be large.
 
         Args:
-            dict_name: Name of the data dictionary to extract from each trial (Supports: IKResults, 
-            IDResults, markerData, forceData, emgData, analogData)
+            dict_name: Name of the data dictionary to extract from each trial (Supports: markerData, forceData, emgData, analogData)
         """
         df = pd.DataFrame()
         for trial_name, trial_data in self.trials.items():

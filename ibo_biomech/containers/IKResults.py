@@ -19,8 +19,7 @@ class IKResults:
     def __post_init__(self):
         if self.filepath is not None:
             self.read(self.filepath)
-        if len(self.data.keys()) > 0:
-            self.columns = list(self.data.keys())
+        self.columns = list(self.data.keys())
 
     def read(self, filepath: str):
         """
@@ -46,7 +45,7 @@ class IKResults:
         if self.unit.lower() == "rad":
             for column in self.data.values():
                 if column.unit != 'deg' and column.unit != 'rad':
-                    print(f"Warning: Column '{column}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
+                    print(f"Warning: Column '{column.name}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
                     continue
                 if column.name in non_angles:
                     continue
@@ -64,7 +63,7 @@ class IKResults:
         if self.unit.lower() == "deg":
             for column in self.data.values():
                 if column.unit != 'deg' and column.unit != 'rad':
-                    print(f"Warning: Column '{column}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
+                    print(f"Warning: Column '{column.name}' has an unrecognized unit '{column.unit}'. Skipping conversion.")
                     continue
                 if column.name in non_angles:
                     continue
