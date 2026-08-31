@@ -173,3 +173,11 @@ class IKResults:
     def __len__(self):
         """Return the number of samples in the data."""
         return len(self.data.keys())
+
+    def __getitem__(self, key):
+        """Return the data for the given column name."""
+        return self.data[key]
+
+    def __contains__(self, key):
+        """Return True if the given column name exists in the data."""
+        return key in self.data
