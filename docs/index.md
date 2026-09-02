@@ -20,6 +20,10 @@ api/analogdata
 api/emgdata
 api/trialdata
 api/subject
+api/ikresults
+api/idresults
+api/data
+api/_mixins
 ```
 
 ```{toctree}

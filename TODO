@@ -1,4 +1,3 @@
-#Containers have a lot of duplicate code. Need a nice base class for them
 #IK and ID data should have residual informations
 #Force plate data regarding, location, rotation, position etc is not properly handled (because I don't know what is meant.)
 #Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?
