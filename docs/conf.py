@@ -59,3 +59,11 @@ html_theme_options = {
     "collapse_navigation": False,
     "sticky_navigation": True,
 }
+
+
+##
+autodoc_default_options = {
+    "members": True,
+    "inherited-members": True,
+    "show-inheritance": True,
+}
