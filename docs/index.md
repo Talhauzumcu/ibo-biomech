@@ -23,7 +23,6 @@ api/subject
 api/ikresults
 api/idresults
 api/data
-api/_mixins
 ```
 
 ```{toctree}
