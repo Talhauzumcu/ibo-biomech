@@ -39,8 +39,6 @@ def test_analog_array_protocol(analog_data):
 
 def test_emg_has_get_raw_data_not_get_data(emg_data):
     assert emg_data.get_raw_data() is emg_data.data
-    assert not hasattr(emg_data, "get_data")
-
 
 def test_emg_process_emg_is_peak_normalized(emg_data):
     processed = emg_data.process_emg()

@@ -6,9 +6,11 @@ analog channel (EMG, raw force-plate voltage, etc.) sampled at a fixed rate.
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from ibo_biomech.utils.utils import apply_filter, validate_crop_range
+from ._mixins import ArrayLikeMixin
 
 @dataclass
-class AnalogData:
+class AnalogData(ArrayLikeMixin):
     """A single analog channel sampled at a fixed rate.
 
     Processing methods operate **in place**.
@@ -46,43 +48,33 @@ class AnalogData:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-        if start_idx < 0 or end_idx > len(self.data) or start_idx >= end_idx:
-            raise ValueError("Invalid crop indices.")
-        
+        validate_crop_range(start_idx, end_idx, len(self.data))
         self.data = self.data[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter in place.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.data = filtfilt(b, a, self.data, axis=0)
-
+        self.data = apply_filter(self.data, self.sampling_rate, cutoff, order, btype='low')
+ 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase high-pass Butterworth filter in place.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.data = filtfilt(b, a, self.data, axis=0)
+        self.data = apply_filter(self.data, self.sampling_rate, cutoff, order, btype='high')
 
     def plot(self) -> None:
         """Plot the signal against time."""
@@ -111,18 +103,3 @@ class AnalogData:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
 
-    def __getitem__(self, index):
-        """Allow indexing into the data."""
-        return self.data[index]
-
-    def __setitem__(self, index, value):
-        """Allow setting values in the data."""
-        self.data[index] = value
-
-    def __len__(self):
-        """Return the number of samples in the data."""
-        return len(self.data)
-
-    def __iter__(self):
-        """Allow iteration over the data."""
-        return iter(self.data)

@@ -5,3 +5,4 @@
 #Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #unlabaled trajectories need to be handled
 #Subject class is not maintained.
+#sampling rate checks / automatic derivation from time should be implemented to all containers.

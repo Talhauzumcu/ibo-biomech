@@ -7,15 +7,14 @@ low-pass envelope, normalise) exposed via :meth:`EMGData.process_emg`.
 import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
+from ibo_biomech.utils.utils import apply_filter
+from .analogData import AnalogData
 
 @dataclass
-class EMGData:
+class EMGData(AnalogData):
     """A single EMG channel and its processing pipeline.
 
-    Unlike most containers in this library, the filtering helpers here **return**
-    new arrays rather than mutating ``data`` in place, so they can be chained
-    inside :meth:`process_emg`. The processed envelope is computed lazily and
-    cached via the :attr:`processed_data` property.
+    The processed EMG data is calculated lazily on the first access of :attr:`processed_data` and cached for subsequent accesses.
 
     Attributes:
         name: Channel label (e.g. ``"EMG_VastusLat"``).
@@ -24,36 +23,38 @@ class EMGData:
         unit: Physical unit of the signal.
         channel: Hardware channel index this signal came from, if known.
     """
-    name: str
-    data: np.ndarray
-    time: Optional[np.ndarray] = None
-    sampling_rate: float = None
     unit: str = "unknown"
-    channel: Optional[int] = None
-
+ 
     def __post_init__(self):
-        if self.time is None and self.sampling_rate is not None:
-            self.time = np.arange(len(self.data)) / self.sampling_rate
+        super().__post_init__()
         self._processed_data = None  # Cache for processed EMG envelope
-
+ 
     def get_raw_data(self) -> np.ndarray:
         """Return the raw, unprocessed EMG samples.
-
+ 
         Returns:
             The underlying ``data`` array.
         """
         return self.data
-
+    
+    def get_data(self) -> np.ndarray:
+        """Return the raw, unprocessed EMG samples.
+ 
+        Returns:
+            The underlying ``data`` array.
+        """
+        return self.data
+    
     def clean_nan(self) -> None:
         """Replace NaN values in the raw signal with zeros, in place."""
         self.data = np.nan_to_num(self.data)
-
+ 
     def process_emg(self) -> np.ndarray:
         """Run the standard EMG processing pipeline.
-
+ 
         Steps: clean NaNs, 2nd-order high-pass at 30 Hz, square (rectify),
         2nd-order low-pass envelope at 10 Hz, then normalise to the peak.
-
+ 
         Returns:
             The processed, peak-normalised EMG envelope, shape ``(n_samples,)``.
         """
@@ -63,111 +64,63 @@ class EMGData:
         enveloped_signal = self._envelope_signal(rectified_signal, cutoff=10, order=2)
         normalized_signal = self._normalize_emg(enveloped_signal)
         return normalized_signal
-
+ 
     def _envelope_signal(self, signal: np.ndarray, cutoff: float, order: int = 4) -> np.ndarray:
         """Low-pass filter a signal to extract its envelope.
-
+ 
         Args:
             signal: Rectified signal to envelope.
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Returns:
             The enveloped (low-pass filtered) signal.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        return filtfilt(b, a, signal, axis=0)
-
-    def lowpass_filter(self, cutoff: float, order: int = 4):
-        """Lowpass filter the EMG data in place. 
-
-        Args:
-            cutoff: Cutoff frequency in Hz.
-            order: Filter order. Defaults to 4.
-
-        Raises:
-            ValueError: If ``sampling_rate`` is not set.
-        """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.data = filtfilt(b, a, self.data, axis=0)
-
-    def highpass_filter(self, cutoff: float, order: int = 4):
-        """highpass filter the EMG data in place. 
-
-        Args:
-            cutoff: Cutoff frequency in Hz.
-            order: Filter order. Defaults to 4.
-
-        Raises:
-            ValueError: If ``sampling_rate`` is not set.
-        """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.data = filtfilt(b, a, self.data, axis=0)
-
+        return apply_filter(signal, self.sampling_rate, cutoff, order, btype='low')
+ 
     def _highpass_filter(self, cutoff: float, order: int = 4) -> np.ndarray:
         """Return a zero-phase high-pass Butterworth filtered copy of the signal.
-
+ 
+        Deliberately does NOT reuse the public (mutating) ``highpass_filter``
+        inherited from :class:`AnalogData` -- ``process_emg`` needs the
+        filtered signal WITHOUT touching ``self.data``, so the raw signal
+        stays available for the rest of the pipeline.
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Returns:
             The filtered signal (the container's ``data`` is left unchanged).
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        return filtfilt(b, a, self.data, axis=0)
-
+        return apply_filter(self.data, self.sampling_rate, cutoff, order, btype='high')
+ 
     @staticmethod
     def _normalize_emg(emg_signal):
         """Normalise a signal to its peak amplitude.
-
+ 
         Args:
             emg_signal: Signal to normalise.
-
+ 
         Returns:
             The signal divided by its maximum value, or the signal unchanged if
             the maximum is zero.
         """
         max_amplitude = np.max(emg_signal)
         normalized_signal = emg_signal / max_amplitude if max_amplitude != 0 else emg_signal
-
+ 
         return normalized_signal
-
-    def plot(self) -> None:
-        """Plot the raw EMG signal against time."""
-        import matplotlib.pyplot as plt
-        time = self.time if self.time is not None else np.arange(self.data.shape[0]) / self.sampling_rate if \
-                                                         self.sampling_rate else np.arange(self.data.shape[0])
-
-        plt.figure(figsize=(12, 6))
-        plt.plot(time, self.data)
-        plt.xlabel('Time (s)')
-        plt.ylabel(f'Signal ({self.unit})')
-        plt.title(f'Analog Signal: {self.name}')
-        plt.show()
-
+ 
     def plot_processed(self) -> None:
         """Plot the processed EMG envelope against time."""
         import matplotlib.pyplot as plt
-
+ 
         time = self.time if self.time is not None else np.arange(self.processed_data.shape[0]) / self.sampling_rate if \
                                                         self.sampling_rate else np.arange(self.processed_data.shape[0])
         plt.figure(figsize=(12, 6))
@@ -176,36 +129,38 @@ class EMGData:
         plt.ylabel(f'Processed Signal ({self.unit})')
         plt.title(f'Processed EMG Signal: {self.name}')
         plt.show()
-
+ 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop the signal in place to ``[start_idx, end_idx)``.
-
+ 
+        Quirk preserved exactly from the pre-refactor version: the cached
+        ``_processed_data`` envelope is re-sliced with the same raw-signal
+        indices rather than invalidated. This conflates a filtered/enveloped
+        signal's indices with the raw signal's -- consider switching to
+        "invalidate + lazily recompute" as a follow-up, but that is a
+        behavior change and deliberately out of scope for this refactor.
+ 
         Args:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-
-        if start_idx < 0 or end_idx > len(self.data) or start_idx >= end_idx:
-            raise ValueError("Invalid crop indices.")
-        
-        self.data = self.data[start_idx:end_idx]
-        self.time = self.time[start_idx:end_idx] if self.time is not None else None
-        self._processed_data = self._processed_data[start_idx:end_idx] if hasattr(self, '_processed_data') else None
-
+        super().crop(start_idx, end_idx)
+        self._processed_data = self._processed_data[start_idx:end_idx] if self._processed_data is not None else None
+ 
     @property
     def processed_data(self) -> np.ndarray:
         """The processed EMG envelope, computed once and cached.
-
+ 
         On first access this runs :meth:`process_emg` and caches the result for
         subsequent accesses.
-
+ 
         Returns:
             The processed, peak-normalised EMG envelope.
         """
         if self._processed_data is None:
             self._processed_data = self.process_emg()
         return self._processed_data
-
+ 
     def __repr__(self) -> str:
         """Return a concise summary of the EMG channel's contents."""
         return (
@@ -213,27 +168,7 @@ class EMGData:
             f"sampling_rate={self.sampling_rate}, unit={self.unit!r}, "
             f"channel={self.channel})"
         )
-
+ 
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
-
-    def __array__(self):
-        """Allow the object to be converted to a NumPy array."""
-        return self.data
-    
-    def __getitem__(self, index):
-        """Allow indexing into the data."""
-        return self.data[index]
-
-    def __setitem__(self, index, value):
-        """Allow setting values in the data."""
-        self.data[index] = value
-
-    def __len__(self):
-        """Return the number of samples in the data."""
-        return len(self.data)
-
-    def __iter__(self):
-        """Allow iteration over the data."""
-        return iter(self.data)

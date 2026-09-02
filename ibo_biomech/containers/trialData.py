@@ -51,6 +51,7 @@ class TrialData:
         self.analog_labels = list(self.analogs.keys())
         self.marker_rate = next(iter(self.markers.values())).sampling_rate if self.markers else None
         self.analog_rate = next(iter(self.analogs.values())).sampling_rate if self.analogs else None
+        self.force_rate = next(iter(self.forces.values())).sampling_rate if self.forces else None
 
     def parse_EMG_data(self, EMGChannels: List[int]) -> None:
         """Build :class:`EMGData` entries from selected analog channels.
@@ -241,7 +242,7 @@ class TrialData:
         Args:
             marker_data: The marker to store.
         """
-        if marker_data.sampling_rate != self.marker_rate:
+        if marker_data.sampling_rate != self.marker_rate and self.marker_rate is not None:
             print(f"[WARNING]: Marker sampling rate {marker_data.sampling_rate} for marker {marker_data.name} does not match trial marker rate {self.marker_rate}.")
         self.markers[marker_data.name] = marker_data
         self.marker_labels = list(self.markers.keys())  # Update cached marker labels
@@ -252,7 +253,7 @@ class TrialData:
         Args:
             force_data: The force plate to store.
         """
-        if force_data.sampling_rate != self.force_rate:
+        if force_data.sampling_rate != self.force_rate and self.force_rate is not None:
             print(f"[WARNING]: Force sampling rate {force_data.sampling_rate} for force plate {force_data.name} does not match trial force rate {self.force_rate}.")
         self.forces[force_data.name] = force_data
 
@@ -262,7 +263,7 @@ class TrialData:
         Args:
             analog_data: The analog channel to store.
         """
-        if analog_data.sampling_rate != self.analog_rate:
+        if analog_data.sampling_rate != self.analog_rate and self.analog_rate is not None:
             print(f"[WARNING]: Analog sampling rate {analog_data.sampling_rate} for analog channel {analog_data.name} does not match trial analog rate {self.analog_rate}.")
         self.analogs[analog_data.name] = analog_data
         self.analog_labels = list(self.analogs.keys())  # Update cached analog labels

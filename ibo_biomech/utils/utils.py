@@ -278,3 +278,45 @@ def time_normalize(signal, num_points=100):
     normalized_signal = np.interp(np.linspace(0, original_length - 1, num_points), np.arange(original_length), signal)
     new_time = np.linspace(0,100, num_points)
     return (new_time,normalized_signal)
+
+def apply_filter(data: np.ndarray, sampling_rate: float, cutoff: float,
+                  order: int = 4, btype: str = 'low', axis: int = 0) -> np.ndarray:
+    """Apply a zero-phase Butterworth filter and return the filtered array.
+ 
+    Args:
+        data: Signal to filter. Any shape; filtering is applied along ``axis``.
+        sampling_rate: Sampling frequency in Hz.
+        cutoff: Cutoff frequency in Hz.
+        order: Filter order. Defaults to 4.
+        btype: ``'low'`` or ``'high'``.
+        axis: Axis along which to filter. Defaults to 0 (use ``axis=1`` for
+            containers that store data as ``(n_channels, n_samples)``, e.g.
+            :class:`~ibo_biomech.containers.forceData.ForceData`).
+ 
+    Returns:
+        The filtered array (new array; input is untouched).
+ 
+    Raises:
+        ValueError: If ``sampling_rate`` is not set.
+    """
+    from scipy.signal import butter, filtfilt
+    if sampling_rate is None:
+        raise ValueError(f"Sampling rate must be set to apply {btype}-pass filter.")
+    b, a = butter(order, cutoff / (0.5 * sampling_rate), btype=btype)
+    return filtfilt(b, a, data, axis=axis)
+ 
+ 
+def validate_crop_range(start_idx: int, end_idx: int, length: int) -> None:
+    """Validate a crop index range against a signal length.
+
+    Args:
+        start_idx: First sample index to keep.
+        end_idx: First sample index to drop (exclusive).
+        length: Number of samples in the signal being cropped.
+ 
+    Raises:
+        ValueError: If the range is invalid.
+    """
+    if start_idx < 0 or end_idx > length or start_idx >= end_idx:
+        raise ValueError("Invalid crop indices.")
+ 

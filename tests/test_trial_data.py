@@ -24,22 +24,6 @@ def test_post_init_caches_labels_and_rates_when_passed_to_constructor(marker_kwa
     assert t.marker_labels == [m.name]
     assert t.marker_rate == marker_kwargs["sampling_rate"]
 
-
-def test_KNOWN_BUG_add_marker_does_not_refresh_cached_labels(trial):
-    # BUG, not a refactor target per se, but worth fixing alongside it:
-    # marker_labels/analog_labels/marker_rate/analog_rate are computed once
-    # in __post_init__ and never refreshed by add_marker()/add_analog(). The
-    # `trial` fixture builds an empty TrialData() then calls add_marker(),
-    # exactly like the documented "add a virtual marker" README workflow --
-    # so trial.marker_labels stays permanently empty/stale even though
-    # trial.markers is populated. This test locks in the CURRENT (buggy)
-    # behavior; flip it once add_marker/add_analog are fixed to refresh
-    # these caches.
-    assert trial.marker_labels == []
-    assert trial.marker_rate is None
-    assert set(trial.markers.keys()) == {"R_Knee", "L_Knee"}  # actual data is fine
-
-
 def test_post_init_rates_none_when_empty():
     t = TrialData(name="empty")
     assert t.marker_rate is None

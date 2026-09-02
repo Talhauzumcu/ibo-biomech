@@ -4,9 +4,11 @@ Bare minimum data container for biomechanical data. Currently used for storing o
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 import numpy as np
+from ibo_biomech.utils.utils import apply_filter, validate_crop_range
+from ._mixins import ArrayLikeMixin
 
 @dataclass
-class Data:
+class Data(ArrayLikeMixin):
     """Processing methods operate **in place**.
     
     Attributes:
@@ -44,53 +46,49 @@ class Data:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-        if start_idx < 0 or end_idx > len(self.data) or start_idx >= end_idx:
-            raise ValueError("Invalid crop indices.")
+        validate_crop_range(start_idx, end_idx, len(self.data))
         self.data = self.data[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
 
+    def _ensure_sampling_rate(self, btype: str) -> None:
+        """Resolve ``sampling_rate`` from a uniform ``time`` vector if not already set."""
+        if self.sampling_rate is not None:
+            return
+        if self.time is not None:
+            if not self._is_uniformly_sampled(self.time):
+                raise ValueError("Time vector is not uniformly sampled. Cannot compute sampling rate.")
+            self.sampling_rate = 1 / np.mean(np.diff(self.time))
+        else:
+            raise ValueError(f"Sampling rate or a uniform time vector must be set to apply {btype}-pass filter.")
+
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter in place.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
-            ValueError: If ``sampling_rate`` is not set.
+            ValueError: If ``sampling_rate`` is not set and cannot be derived
+                from a uniformly sampled ``time`` vector.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            if self.time is not None:
-                if not self._is_uniformly_sampled(self.time):
-                    raise ValueError("Time vector is not uniformly sampled. Cannot compute sampling rate.")
-                self.sampling_rate = 1 / np.mean(np.diff(self.time))
-            else:
-                raise ValueError("Sampling rate or a uniform time vector must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.data = filtfilt(b, a, self.data, axis=0)
-
+        self._ensure_sampling_rate('low')
+        self.data = apply_filter(self.data, self.sampling_rate, cutoff, order, btype='low')
+ 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase high-pass Butterworth filter in place.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
-            ValueError: If ``sampling_rate`` is not set.
+            ValueError: If ``sampling_rate`` is not set and cannot be derived
+                from a uniformly sampled ``time`` vector.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            if self.time is not None:
-                if not self._is_uniformly_sampled(self.time):
-                    raise ValueError("Time vector is not uniformly sampled. Cannot compute sampling rate.")
-                self.sampling_rate = 1 / np.mean(np.diff(self.time))
-            else:
-                raise ValueError("Sampling rate or a uniform time vector must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.data = filtfilt(b, a, self.data, axis=0)
-
+        self._ensure_sampling_rate('high')
+        self.data = apply_filter(self.data, self.sampling_rate, cutoff, order, btype='high')
+ 
     def plot(self) -> None:
         """Plot the signal against time."""
         import matplotlib.pyplot as plt
@@ -118,26 +116,6 @@ class Data:
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
-
-    def __array__(self):
-        """Allow the object to be converted to a NumPy array."""
-        return self.data
-    
-    def __getitem__(self, index):
-        """Allow indexing into the data."""
-        return self.data[index]
-
-    def __setitem__(self, index, value):
-        """Allow setting values in the data."""
-        self.data[index] = value
-
-    def __len__(self):
-        """Return the number of samples in the data."""
-        return len(self.data)
-
-    def __iter__(self):
-        """Allow iteration over the data."""
-        return iter(self.data)
 
     def __add__(self, other):
         """Allow addition with another Data object or a scalar."""

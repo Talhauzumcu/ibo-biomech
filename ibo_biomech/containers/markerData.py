@@ -68,54 +68,46 @@ class MarkerData:
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter to all three axes.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.x = filtfilt(b, a, self.x)
-        self.y = filtfilt(b, a, self.y)
-        self.z = filtfilt(b, a, self.z)
-
+        self.x = apply_filter(self.x, self.sampling_rate, cutoff, order, btype='low')
+        self.y = apply_filter(self.y, self.sampling_rate, cutoff, order, btype='low')
+        self.z = apply_filter(self.z, self.sampling_rate, cutoff, order, btype='low')
+ 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase high-pass Butterworth filter to all three axes.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.x = filtfilt(b, a, self.x)
-        self.y = filtfilt(b, a, self.y)
-        self.z = filtfilt(b, a, self.z)
-
+        self.x = apply_filter(self.x, self.sampling_rate, cutoff, order, btype='high')
+        self.y = apply_filter(self.y, self.sampling_rate, cutoff, order, btype='high')
+        self.z = apply_filter(self.z, self.sampling_rate, cutoff, order, btype='high')
+ 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop the trajectory in place to the half-open range ``[start_idx, end_idx)``.
-
+ 
         Args:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-        if start_idx < 0 or end_idx > len(self.x) or start_idx >= end_idx:
-            raise ValueError("Invalid crop indices.")
-        
+        validate_crop_range(start_idx, end_idx, len(self.x))
+ 
         self.x=self.x[start_idx:end_idx]
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
+ 
 
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate the trajectory in place about a coordinate axis.

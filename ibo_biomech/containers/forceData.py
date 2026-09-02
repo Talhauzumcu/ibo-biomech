@@ -8,9 +8,10 @@ import numpy as np
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from ibo_biomech.utils.utils import *
+from ._mixins import ArrayLikeMixin
 
 @dataclass
-class ForceData:
+class ForceData(ArrayLikeMixin):
     """Signals and geometry for a single force plate.
 
     Most processing methods operate **in place**. Convenience properties
@@ -86,39 +87,31 @@ class ForceData:
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter to force, moment and CoP.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply low-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='low')
-        self.force = filtfilt(b, a, self.force, axis=1)
-        self.moment = filtfilt(b, a, self.moment, axis=1)
-        self.cop = filtfilt(b, a, self.cop, axis=1)
-
+        self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='low', axis=1)
+        self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='low', axis=1)
+        self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='low', axis=1)
+ 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase high-pass Butterworth filter to force, moment and CoP.
-
+ 
         Args:
             cutoff: Cutoff frequency in Hz.
             order: Filter order. Defaults to 4.
-
+ 
         Raises:
             ValueError: If ``sampling_rate`` is not set.
         """
-        from scipy.signal import butter, filtfilt
-        if self.sampling_rate is None:
-            raise ValueError("Sampling rate must be set to apply high-pass filter.")
-        b, a = butter(order, cutoff / (0.5 * self.sampling_rate), btype='high')
-        self.force = filtfilt(b, a, self.force, axis=1)
-        self.moment = filtfilt(b, a, self.moment, axis=1)
-        self.cop = filtfilt(b, a, self.cop, axis=1)
+        self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='high', axis=1)
+        self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='high', axis=1)
+        self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='high', axis=1)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
         """Zero out frames whose force magnitude is below a threshold.
@@ -159,8 +152,7 @@ class ForceData:
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
-        if start_idx < 0 or end_idx > self.num_samples or start_idx >= end_idx:
-            raise ValueError("Invalid crop indices.")
+        validate_crop_range(start_idx, end_idx, self.num_samples)
         
         self.force = self.force[:, start_idx:end_idx]
         self.moment = self.moment[:, start_idx:end_idx]
@@ -333,22 +325,3 @@ class ForceData:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
 
-    def __array__(self):
-        """Allow the object to be converted to a NumPy array."""
-        return self.data
-    
-    def __getitem__(self, index):
-        """Allow indexing into the data."""
-        return self.data[index]
-
-    def __setitem__(self, index, value):
-        """Allow setting values in the data."""
-        self.data[index] = value
-
-    def __len__(self):
-        """Return the number of samples in the data."""
-        return len(self.data)
-
-    def __iter__(self):
-        """Allow iteration over the data."""
-        return iter(self.data)
