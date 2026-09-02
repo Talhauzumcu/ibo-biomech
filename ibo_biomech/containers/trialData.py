@@ -241,7 +241,10 @@ class TrialData:
         Args:
             marker_data: The marker to store.
         """
+        if marker_data.sampling_rate != self.marker_rate:
+            print(f"[WARNING]: Marker sampling rate {marker_data.sampling_rate} for marker {marker_data.name} does not match trial marker rate {self.marker_rate}.")
         self.markers[marker_data.name] = marker_data
+        self.marker_labels = list(self.markers.keys())  # Update cached marker labels
 
     def add_force(self, force_data: ForceData) -> None:
         """Add (or replace) a force plate, keyed by its name.
@@ -249,6 +252,8 @@ class TrialData:
         Args:
             force_data: The force plate to store.
         """
+        if force_data.sampling_rate != self.force_rate:
+            print(f"[WARNING]: Force sampling rate {force_data.sampling_rate} for force plate {force_data.name} does not match trial force rate {self.force_rate}.")
         self.forces[force_data.name] = force_data
 
     def add_analog(self, analog_data: AnalogData) -> None:
@@ -257,8 +262,11 @@ class TrialData:
         Args:
             analog_data: The analog channel to store.
         """
+        if analog_data.sampling_rate != self.analog_rate:
+            print(f"[WARNING]: Analog sampling rate {analog_data.sampling_rate} for analog channel {analog_data.name} does not match trial analog rate {self.analog_rate}.")
         self.analogs[analog_data.name] = analog_data
-
+        self.analog_labels = list(self.analogs.keys())  # Update cached analog labels
+        
     def add_emg(self, emg_data: EMGData) -> None:
         """Add (or replace) an EMG channel, keyed by its name.
 
