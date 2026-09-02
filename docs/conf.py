@@ -67,5 +67,4 @@ autodoc_default_options = {
     "inherited-members": True,
     "show-inheritance": True,
     "private-members": True,
-    "special-members": True,
 }
