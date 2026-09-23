@@ -32,10 +32,11 @@ class FileConverter:
         Args:
             c3d_path: Path to the source C3D file.
             h5_path: Destination path for the HDF5 file.
-            metadata: Optional metadata fields to include in the HDF5 file. 
-            Keys can include ``project``, ``project_pi``, ``subject_id``, 
-            ``condition``, ``body_mass``, ``body_height``, ``sex``, and ``age``. 
-            Any missing fields will be filled with ``"Unknown"``.
+            metadata: Optional metadata fields to include in the HDF5 file.
+                Keys can include ``project``, ``project_pi``, ``subject_id``,
+                ``condition``, ``body_mass``, ``body_height``, ``sex``, and ``age``.
+                Any missing fields will be filled with ``"Unknown"``.
+
         Returns:
             The path to the created HDF5 file.
         """
@@ -161,8 +162,8 @@ class FileConverter:
                 plate_group.create_dataset('Time', data=analog_time, compression="gzip")
                 plate_group.create_dataset("Position", data=fp_data.position, compression="gzip")
                 plate_group.create_dataset("Rotation", data=fp_data.rotation, compression="gzip")
-                plate_group.create_dataset("origin", data=fp_data.origin, compression="gzip")
-                plate_group.create_dataset("corners", data=fp_data.corners, compression="gzip")
+                plate_group.create_dataset("Origin", data=fp_data.origin, compression="gzip")
+                plate_group.create_dataset("Corners", data=fp_data.corners, compression="gzip")
                 plate_group.attrs["CoordinateSystem"] = 1 # Is this information available in c3d files? If not where to get it? or what is default?
             
                 # corners = fp_data.metadata.get("corners") if fp_data.metadata else None
@@ -334,4 +335,3 @@ class FileConverter:
         result = FileConverter.h5_to_opensim(temp_h5_path, mot_path, trc_path, axis, angle, convert_to_meters)
         os.remove(temp_h5_path)
         return result
-

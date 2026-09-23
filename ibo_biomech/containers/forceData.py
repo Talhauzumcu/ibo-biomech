@@ -98,7 +98,10 @@ class ForceData(ArrayLikeMixin):
         self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='low', axis=1)
         self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='low', axis=1)
         self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='low', axis=1)
- 
+        self.Tz = apply_filter(self.Tz, self.sampling_rate, cutoff, order, btype='low', axis=0)
+        self.position = apply_filter(self.position, self.sampling_rate, cutoff, order, btype='low', axis=1)
+
+
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase high-pass Butterworth filter to force, moment and CoP.
  
@@ -112,6 +115,8 @@ class ForceData(ArrayLikeMixin):
         self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='high', axis=1)
         self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='high', axis=1)
         self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='high', axis=1)
+        self.Tz = apply_filter(self.Tz, self.sampling_rate, cutoff, order, btype='high', axis=0)
+        self.position = apply_filter(self.position, self.sampling_rate, cutoff, order, btype='high', axis=1)
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
         """Zero out frames whose force magnitude is below a threshold.
@@ -128,6 +133,7 @@ class ForceData(ArrayLikeMixin):
         self.force[:, low_force_indices] = 0
         self.moment[:, low_force_indices] = 0
         self.cop[:, low_force_indices] = 0
+        self.Tz[low_force_indices] = 0
 
     def downsample(self, factor: int) -> None:
         """Downsample force, moment and CoP in place using FIR decimation.
@@ -141,6 +147,12 @@ class ForceData(ArrayLikeMixin):
         self.force = decimate(self.force, factor, axis=1, ftype='fir', zero_phase=True)
         self.moment = decimate(self.moment, factor, axis=1, ftype='fir', zero_phase=True)
         self.cop = decimate(self.cop, factor, axis=1, ftype='fir', zero_phase=True)
+        self.time = decimate(self.time, factor, ftype='fir', zero_phase=True) if self.time is not None else None
+        self.Tz = decimate(self.Tz, factor, ftype='fir', zero_phase=True)
+        self.corners = decimate(self.corners, factor, axis=2, ftype='fir', zero_phase=True)
+        self.position = decimate(self.position, factor, axis=1, ftype='fir', zero_phase=True)
+        self.rotation = decimate(self.rotation, factor, axis=2, ftype='fir', zero_phase=True)
+
         self._update_num_samples()
         if self.sampling_rate:
             self.sampling_rate /= factor
@@ -172,11 +184,21 @@ class ForceData(ArrayLikeMixin):
             angle_deg: Rotation angle in degrees.
         """
         rotation_matrix = get_rotation_matrix(axis, angle_deg)
-        self.force = rotation_matrix @ self.force
-        self.moment = rotation_matrix @ self.moment
-        self.cop = rotation_matrix @ self.cop
-        self.position = rotation_matrix @ self.position
-        self.rotation = rotation_matrix @ self.rotation
+        self.force = self._rotate(rotation_matrix, self.force)
+        self.moment = self._rotate(rotation_matrix, self.moment)
+        self.cop = self._rotate(rotation_matrix, self.cop)
+        self.position = self._rotate(rotation_matrix, self.position)
+        self.rotation = self._rotate(rotation_matrix, self.rotation)
+
+        for i in range(self.corners.shape[1]):  # Rotate each corner
+            self.corners[:, i, :] = self._rotate(rotation_matrix, self.corners[:, i, :])
+
+    def _rotate(self, rotation_matrix: np.ndarray, data: np.ndarray) -> np.ndarray:
+        if len(data.shape) == 2:
+            return rotation_matrix @ data
+        _data = np.moveaxis(data, -1, 0)  # Move time to first
+        rotated_data = rotation_matrix @ _data  # Apply rotation
+        return np.moveaxis(rotated_data, 0, -1)  # Move time back to first axis
 
     def convert_units(self, target_unit: str) -> None:
         """Convert position-derived quantities to a target length unit in place.
@@ -204,8 +226,14 @@ class ForceData(ArrayLikeMixin):
         self.moment *= factor
         self.cop *= factor
         self.Tz *= factor
+        self.position *= factor
+        self.corners *= factor
+        self.origin *= factor
+
         self.unit_moment = f'N{target_unit}'
         self.unit_cop = target_unit
+        self.metadata['unit_moment'] = self.unit_moment
+        self.metadata['unit_position'] = self.unit_cop
 
     def plot(self) -> None:
         """Plot force, moment and centre of pressure against time in three subplots."""

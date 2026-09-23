@@ -4,9 +4,9 @@ This module defines :class:`OsimHandler`, wrappers around the OpenSim
 Python API for running Inverse Kinematics, Scaling and Inverse Dynamics.
 
 Note:
-    - Currently Initial and Final times are not checked from the setup files.
-    They have to be either provided in the function call or will be pulled from the 
-    marker data or IK data (Starting from first frame and ending at last frame)
+    Initial and final times are not read from the setup files. Provide them
+    explicitly, or the wrapper uses the first and last times in the marker
+    data or IK results.
 
 """
 from pathlib import Path
@@ -178,12 +178,16 @@ class OsimHandler:
         rel_model_path = os.path.relpath(model_path, setup_dir)
         rel_trc_path = os.path.relpath(trc_file, setup_dir)
         rel_output_path = os.path.relpath(output_file, setup_dir)
-                
+        
         time_range = osim.ArrayDouble()
         time_range.append(initial_time)
         time_range.append(final_time)
         
         scalingTool.getGenericModelMaker().setModelFileName(rel_model_path)
+        if mass is not None:
+            scalingTool.setSubjectMass(mass)
+        if height is not None:
+            scalingTool.setSubjectHeight(height)
 
         modelScaler = scalingTool.getModelScaler()
         modelScaler.setMarkerFileName(rel_trc_path)

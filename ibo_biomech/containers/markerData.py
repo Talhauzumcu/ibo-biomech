@@ -66,6 +66,29 @@ class MarkerData:
         ones = np.ones(n_samples)
         return np.vstack([self.x, self.y, self.z, ones])
 
+    def clean_nan(self) -> None:
+        """Replace NaN values in the trajectory with linear interpolation."""
+        self.x = self._gap_fill(self.x, 'linear')
+        self.y = self._gap_fill(self.y, 'linear')
+        self.z = self._gap_fill(self.z, 'linear')
+
+    def _gap_fill(self, data: np.ndarray, method: str = 'linear') -> np.ndarray:
+        """Fill NaN gaps in a 1D array using interpolation.
+
+        Args:
+            data: 1D array with NaN values to fill.
+            method: Interpolation method (passed to :func:`np.interp`).
+
+        Returns:
+            Array with NaN values filled.
+        """
+        if not np.isnan(data).any():
+            return data
+
+        x = np.arange(len(data))
+        valid = ~np.isnan(data)
+        return np.interp(x, x[valid], data[valid], left=np.nan, right=np.nan)
+
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter to all three axes.
  

@@ -363,12 +363,12 @@ class H5Handler:
             for ds_name, arr in [("Force", fp_data.force),
                                   ("Moment", fp_data.moment),
                                   ("COP", fp_data.cop),
-                                  ("Location", fp_data.location),
                                   ("Position", fp_data.position),
                                   ("Rotation", fp_data.rotation),
-                                  ("Offset", fp_data.offset),
+                                  ("Origin", fp_data.origin),
                                   ("Tz", fp_data.Tz),
-                                  ("Time", fp_data.time)
+                                  ("Time", fp_data.time),
+                                  ("Corners", fp_data.corners)
                                   ]:
                 if ds_name in plate:
                     del plate[ds_name]
@@ -390,6 +390,7 @@ class H5Handler:
         if labeled_group is None:
             return markers
 
+        unit = labeled_group.attrs.get("Unit", "mm")
         labels = self._decode_labels(labeled_group.attrs.get("Labels", []))
         data = labeled_group["Data"][:]  # shape: (n_markers, 4, n_frames)
         time = labeled_group['Time'][:] if 'Time' in labeled_group else None  # Optional time dataset
@@ -400,6 +401,7 @@ class H5Handler:
                 x=trajectory[0],
                 y=trajectory[1],
                 z=trajectory[2],
+                unit=unit,
                 sampling_rate=sampling_rate,
                 time=time
             )
@@ -540,17 +542,17 @@ class H5Handler:
             time = plate["Time"][:] if "Time" in plate else None
             moment = plate["Moment"][:] if "Moment" in plate else np.zeros_like(force)
             cop = plate["COP"][:] if "COP" in plate else np.zeros_like(force)
-            location = (plate["Location"][:]
-                        if "Location" in plate
-                        else np.zeros((3, 4, n_samples)))
             position = (plate["Position"][:]
                         if "Position" in plate
                         else np.zeros((3, n_samples)))
             rotation = (plate["Rotation"][:]
                         if "Rotation" in plate
                         else np.zeros((3, 3, n_samples)))
-            offset = (plate["Offset"][:]
-                      if "Offset" in plate
+            corners = (plate["Corners"][:]
+                       if "Corners" in plate
+                       else np.zeros((4, 3, n_samples)))
+            origin = (plate["Origin"][:]
+                      if "Origin" in plate
                       else np.zeros((3, 1)))
             Tz = (plate["Tz"][:] if "Tz" in plate else np.zeros(n_samples))
 
@@ -570,10 +572,10 @@ class H5Handler:
                 force=force,
                 moment=moment,
                 cop=cop,
-                location=location,
+                corners=corners,
+                origin=origin,
                 position=position,
                 rotation=rotation,
-                offset=offset,
                 metadata=metadata,
                 Tz = Tz,
                 sampling_rate=sampling_rate,

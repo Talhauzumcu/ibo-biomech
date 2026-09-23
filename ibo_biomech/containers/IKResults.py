@@ -37,6 +37,7 @@ class IKResults(MotResults):
                     continue
                 column.data = np.rad2deg(column.data)
                 column.unit = 'deg'
+            self.metadata['inDegrees'] = 'yes'
             self.unit = "deg"
         else:
             print("Data is already in degrees or unit is not recognized.")
@@ -53,5 +54,6 @@ class IKResults(MotResults):
                 column.data = np.deg2rad(column.data)
                 column.unit = 'rad'
             self.unit = "rad"
+            self.metadata['inDegrees'] = 'no'
         else:
             print("Data is already in radians or unit is not recognized.")

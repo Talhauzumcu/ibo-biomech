@@ -3,11 +3,11 @@
 Builds an API reference from the library's Google-style docstrings using
 autodoc + napoleon, rendered with the Read the Docs theme.
 """
-import os
 import sys
+from pathlib import Path
 
 # Make the package importable for autodoc (also works without `pip install`).
-sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # -- Project information -----------------------------------------------------
 project = "ibo-biomech"
