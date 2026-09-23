@@ -159,27 +159,28 @@ class FileConverter:
                 plate_group.create_dataset("Moment", data=fp_data.moment, compression="gzip")
                 plate_group.create_dataset('Tz', data=fp_data.Tz, compression="gzip")
                 plate_group.create_dataset('Time', data=analog_time, compression="gzip")
-                corners = fp_data.metadata.get("corners") if fp_data.metadata else None
-                if corners is not None and num_frames > 0:
-                    location = np.repeat(corners[:, :, np.newaxis], numSamples, axis=2)
-                else:
-                    location = np.zeros((4, 3, numSamples), dtype=np.float64)
-                plate_group.create_dataset("Location", data=location, compression="gzip")
-
-                origin = fp_data.metadata.get("origin") if fp_data.metadata else None
-                if origin is not None and num_frames > 0:
-                    position = np.zeros((3, numSamples), dtype=np.float64)
-                    position[0:3, :] = np.asarray(origin, dtype=np.float64).reshape(3, 1)
-                else:
-                    position = np.zeros((3, numSamples), dtype=np.float64)
-                
-                #Since c3d files don't hold these information, initial fileconversion uses static values. 
-                #These can be updated directly from the h5 file and resaved.
-                plate_group.create_dataset("Position", data=position, compression="gzip")
-                plate_group.create_dataset("Rotation", data=np.zeros((3,3, numSamples)), compression="gzip")
-                plate_group.create_dataset("Offset", data=np.zeros((3,)), compression="gzip")
-                plate_group.attrs["CoordinateSystem"] = 0 # Is this information available in c3d files? If not where to get it? or what is default?
+                plate_group.create_dataset("Position", data=fp_data.position, compression="gzip")
+                plate_group.create_dataset("Rotation", data=fp_data.rotation, compression="gzip")
+                plate_group.create_dataset("origin", data=fp_data.origin, compression="gzip")
+                plate_group.create_dataset("corners", data=fp_data.corners, compression="gzip")
+                plate_group.attrs["CoordinateSystem"] = 1 # Is this information available in c3d files? If not where to get it? or what is default?
             
+                # corners = fp_data.metadata.get("corners") if fp_data.metadata else None
+                # if corners is not None and num_frames > 0:
+                #     corners = np.repeat(corners[:, :, np.newaxis], numSamples, axis=2)
+                # else:
+                #     corners = np.zeros((4, 3, numSamples), dtype=np.float64)
+                # plate_group.create_dataset("Corners", data=corners, compression="gzip")
+
+                # origin = fp_data.metadata.get("origin") if fp_data.metadata else None
+                # if origin is not None and num_frames > 0:
+                #     origin = np.repeat(origin[:, np.newaxis], numSamples, axis=1)
+                # else:
+                #     origin = np.zeros((3, numSamples), dtype=np.float64)
+                # plate_group.create_dataset("Origin", data=origin, compression="gzip")
+                # fp_rotation, position = get_fp_cs(fp_data.corners)
+               
+                
             h5f.create_group("RigidBodies") #C3d doesn't hold these? have to be custom created
             events_group = h5f.create_group("Events")
             h5f.create_group("CustomFields")

@@ -23,10 +23,10 @@ class ForceData(ArrayLikeMixin):
         force: Force components ``Fx, Fy, Fz``, shape ``(3, n_samples)``.
         moment: Moment components ``Mx, My, Mz``, shape ``(3, n_samples)``.
         cop: Centre of pressure ``x, y, z``, shape ``(3, n_samples)``.
-        location: Plate corner coordinates, shape ``(3, 4, n_samples)``.
-        position: Plate origin position, shape ``(3, n_samples)``.
+        corners: Plate corner coordinates, shape ``(3, 4, n_samples)``.
+        position: Plate center position in 3D mocap coordinate system, shape ``(3, n_samples)``.
         rotation: Plate orientation matrices, shape ``(3, 3, n_samples)``.
-        offset: Origin offset relative to the corners, shape ``(3, 1)``.
+        origin: Origin offset relative to the corners, shape ``(3, 1)``.
         Tz: Vertical free moment used for gait-event detection, shape
             ``(n_samples,)``.
         coordinateSystem: ``1`` if data is in global coordinates, ``0`` if local.
@@ -41,12 +41,12 @@ class ForceData(ArrayLikeMixin):
     force: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Fx, Fy, Fz
     moment: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Mx, My, Mz
     cop: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Center of Pressure x, y, z
-    location: np.ndarray = field(default_factory=lambda: np.zeros((3, 4, 1))) # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
-    position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate origin
-    rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation
-    offset: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # ndarray(3, 1) - forceplate origin offset under corners.  ## Is this relative to the mean position of the corners?
+    corners: np.ndarray = field(default_factory=lambda: np.zeros((3, 4, 1))) # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
+    position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate center (in the 3D mocap coordinate system)
+    rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation 
+    origin: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # ndarray(3, 1) - forceplate origin offset under corners. This is same as c3d plate corners. So [0,0,x] where x is the offset
     Tz: np.ndarray = field(default_factory=lambda: np.zeros((1,))) # (n_samples,) - Vertical force component used for gait event detection
-    coordinateSystem: int = field(default_factory=lambda: 0) # is forceplate data saved in (1 = global, 0 = local) coordinates
+    coordinateSystem: bool = field(default_factory=lambda: 1) # is forceplate data saved in (1 = global, 0 = local) coordinates
     metadata: Dict = field(default_factory=dict)
     sampling_rate: float = None
     time: Optional[np.ndarray] = None
@@ -80,7 +80,7 @@ class ForceData(ArrayLikeMixin):
         self.force = np.nan_to_num(self.force)
         self.moment = np.nan_to_num(self.moment)
         self.cop = np.nan_to_num(self.cop)
-        self.location = np.nan_to_num(self.location)
+        self.corners = np.nan_to_num(self.corners)
         self.position = np.nan_to_num(self.position)
         self.rotation = np.nan_to_num(self.rotation)
         self.Tz = np.nan_to_num(self.Tz)
@@ -157,7 +157,7 @@ class ForceData(ArrayLikeMixin):
         self.force = self.force[:, start_idx:end_idx]
         self.moment = self.moment[:, start_idx:end_idx]
         self.cop = self.cop[:, start_idx:end_idx]
-        self.location = self.location[:, :, start_idx:end_idx]
+        self.corners = self.corners[:, :, start_idx:end_idx]
         self.position = self.position[:, start_idx:end_idx]
         self.rotation = self.rotation[:, :, start_idx:end_idx]
         self.Tz = self.Tz[start_idx:end_idx]

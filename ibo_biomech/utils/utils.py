@@ -319,4 +319,20 @@ def validate_crop_range(start_idx: int, end_idx: int, length: int) -> None:
     """
     if start_idx < 0 or end_idx > length or start_idx >= end_idx:
         raise ValueError("Invalid crop indices.")
- 
+
+def get_fp_cs(fp_corners):
+    """Get the force plate coordinate system from the corner coordinates.
+
+    Args:
+        fp_corners: 3x4 array of force plate corner coordinates in the global frame.
+    Returns:
+        The force plate coordinate system (3x3 array) and the origin (3x1 array).
+    """
+    origin = np.mean(fp_corners, axis=1)
+    y_axis = ((fp_corners[:,0] + fp_corners[:,1]) / 2) - origin
+    x_axis = ((fp_corners[:,0] + fp_corners[:,3]) / 2) - origin
+    z_axis = np.cross(x_axis, y_axis)
+    x_axis /= np.linalg.norm(x_axis)
+    y_axis /= np.linalg.norm(y_axis)
+    z_axis /= np.linalg.norm(z_axis)
+    return np.column_stack((x_axis, y_axis, z_axis)), origin

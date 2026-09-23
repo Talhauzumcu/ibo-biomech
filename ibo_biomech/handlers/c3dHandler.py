@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData
 import numpy as np
 from copy import deepcopy
+from ibo_biomech.utils.utils import *
 
 class C3DHandler:
     """Load, manipulate and export C3D motion-capture files.
@@ -147,12 +148,22 @@ class C3DHandler:
                 'origin': plate['origin']
             }
 
+            fp_rotation, position = get_fp_cs(plate['corners'])
+
+            fp_rotation = np.repeat(fp_rotation[:, :, np.newaxis], plate['force'].shape[1], axis=2) #c3d has these as static values, to be consistent with future moving fp implementations repeat these.
+            position = np.repeat(position[:, np.newaxis], plate['force'].shape[1], axis=1)
+            corners = np.repeat(plate['corners'][:, :, np.newaxis], plate['force'].shape[1], axis=2)
+
             self.forces[f"forceplate_{i}"] = ForceData(
                 name=f"forceplate_{i}",
                 force=plate['force'],
                 moment=plate['moment'],
                 cop=plate['center_of_pressure'],
                 Tz = plate['Tz'][2,:],
+                rotation=fp_rotation,
+                position=position,
+                corners=corners,
+                origin=plate['origin'],
                 metadata=metadata,
                 sampling_rate=self.c3d_data['parameters']['ANALOG']['RATE']['value'][0]
             )
