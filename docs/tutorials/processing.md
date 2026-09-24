@@ -58,9 +58,9 @@ mid = MarkerData(
 trial.add_marker(mid)
 ```
 
-Marker arithmetic such as `(right + left) / 2` is available, but currently
-regenerates time from zero and does not validate units or time alignment. The
-explicit constructor above preserves this example's 2-second offset.
+Marker arithmetic such as `(right + left) / 2` also preserves timestamps and
+source frame offsets. Addition and marker division reject mismatched supplied
+clocks or units. Derived markers have unknown measurement residuals.
 
 ## Crop by each channel's time
 
@@ -107,7 +107,7 @@ force_time = np.arange(n) / 1000.0
 force = np.vstack([np.zeros(n), np.zeros(n), np.full(n, 700.0)])
 plate = ForceData(
     name="forceplate_0", force=force,
-    moment=np.zeros((3, n)), cop=np.zeros((3, n)), Tz=np.zeros(n),
+    moment=np.zeros((3, n)), cop=np.zeros((3, n)), Tz=np.zeros((3, n)),
     corners=np.repeat(np.array([
         [250., -250., -250., 250.],
         [250., 250., -250., -250.],
@@ -129,12 +129,16 @@ For this example, +Z is vertical before the rotation and +Y afterwards. Rotation
 must match your acquisition coordinates. `convert_units("m")` converts lengths
 and length-dependent moments; force magnitudes remain in their original unit.
 
-Current force filtering also filters plate positions; high-pass filtering can
-therefore erase a static position. Optional one-sample defaults for `Tz` and
-position can cause filter failures. `downsample(factor)` currently filters time
-and rotation matrices, distorting both; avoid it until the
-[resampling fix](../remaining-issues.md) is implemented. Access writable signals
-through `plate.force`, `plate.moment`, or `plate.cop`; stacked `plate.data` is a copy.
+Force filtering leaves plate geometry unchanged. Missing signals initialize
+with the full sample count; absent geometry is explicitly unknown (NaN).
+`downsample(factor)` anti-aliases signals and samples timestamps, geometry and
+orientations at matching original indices. It validates uniform clocks, proper
+rotations and consistent shapes before changing the container. Static geometry
+may be supplied once and is expanded by the constructor.
+
+Access writable signals through `plate.force`, `plate.moment`, `plate.cop` or
+`plate.Tz`; stacked `plate.data` is a copy. `Tz` is the full moment-at-CoP vector,
+in the same coordinate frame as force/CoP, rather than a scalar vertical moment.
 
 ## Analog and EMG signals
 
@@ -161,8 +165,8 @@ squares the signal, low-pass filters at 10 Hz (order 2), and normalizes to the
 peak. The returned envelope is dimensionless; it is not MVC-normalized.
 
 `trial.parse_EMG_data([3])` also creates EMG channels from analogs, but currently
-shares the source array and resets its time origin. Explicit copying preserves
-both independence and timing. `processed_data` caches the envelope; subsequent
+preserves time while sharing the source array. Explicit copying also preserves
+independence. `processed_data` caches the envelope; subsequent
 raw-data edits or filtering do not invalidate that cache. Call `process_emg()`
 again for a fresh result after edits.
 

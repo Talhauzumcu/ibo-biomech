@@ -12,8 +12,8 @@ def test_post_init_cleans_nans_and_sets_num_samples(force_kwargs):
     assert fd.num_samples == fd.force.shape[1]
 
 
-def test_force_shape_assertion():
-    with pytest.raises(AssertionError):
+def test_force_shape_validation():
+    with pytest.raises(ValueError, match='shape'):
         ForceData(name="bad", force=np.zeros((2, 10)))  # must be (3, n_samples)
 
 
@@ -66,10 +66,10 @@ def test_crop_trims_every_geometry_array(force_data):
     assert force_data.force.shape == (3, 20)
     assert force_data.moment.shape == (3, 20)
     assert force_data.cop.shape == (3, 20)
-    assert force_data.location.shape == (3, 4, 20)
+    assert force_data.corners.shape == (3, 4, 20)
     assert force_data.position.shape == (3, 20)
     assert force_data.rotation.shape == (3, 3, 20)
-    assert force_data.Tz.shape == (20,)
+    assert force_data.Tz.shape == (3, 20)
     assert force_data.time.shape == (20,)
 
 

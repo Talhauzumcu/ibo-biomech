@@ -30,12 +30,13 @@ Dictionary access raises `KeyError` for a missing label. `get_marker(name)`,
 `get_force(name)`, `get_analog(name)`, and `get_analog_by_channel(index)` return
 `None` when no match exists. C3D analog channel indices start at zero.
 
-The returned trial is a deep copy of the handler's parsed containers. Treat it
-as your processing dataset. `handler.write_c3d()` writes the raw C3D structure;
-it does not synchronize arbitrary changes made to the trial or handler
-containers. Use the [processed export workflow](opensim-export.md) for TRC/MOT.
-Create a new handler for a fresh load: repeated loading on one handler currently
-duplicates analog channels.
+The returned trial shares the handler's processed containers; the explicit
+`deepcopy()` above preserves a separate processing copy. Write that copy with
+`handler.write_c3d("processed.c3d", trial)`. The writer supports marker and
+source-analog processing and source-aligned cropping. It rejects direct edits
+to derived force vectors/geometry; use HDF5/MOT for those. Separate EMG/IK/ID
+results also belong in HDF5. `handler.write_raw_c3d()` explicitly writes the
+original raw structure. Repeated loading rebuilds all channel mappings.
 
 ## Read the institute HDF5 format
 
@@ -51,15 +52,16 @@ print(trial.name, trial.metadata)
 print(trial.marker_labels, trial.marker_rate)
 ```
 
-Use the default load flags for now. Disabling marker or analog loading passes
-`None` into a container that expects dictionaries. Force geometry has a separate
-schema mismatch: check [the remaining issues](../remaining-issues.md) before
-rotating HDF5 forces or converting them to MOT.
+Only the current force schema (2) is accepted, with vector `Tz` of shape
+`(3, n_samples)`. Regenerate older files using `FileConverter.c3d_to_h5()`;
+there are no legacy layout or scalar-moment compatibility paths. Selective
+loading uses empty collections and tracks them so later saves preserve the
+intentionally skipped data.
 
 ## Add metadata without processing arrays
 
-`modify_metadata()` returns a new handler. Supply a different destination path;
-the current default tries to copy the source file onto itself.
+`modify_metadata()` returns a new handler and writes atomically. Omit
+`out_path` to update the source, or supply a new destination.
 
 ```python
 from pathlib import Path
@@ -101,16 +103,17 @@ for name, plate in source_trial.forces.items():
     assert np.allclose(reloaded.forces[name].corners, plate.corners)
 ```
 
-General processed saving is still limited: force geometry is not consistently
-loaded across schema variants, changed units are not saved consistently, and
-cropping does not update residuals/events or all frame metadata. The saver also
-expects some template datasets, including marker `Time`, to exist. A destination
-equal to the source raises `SameFileError`.
+Saving validates shared clocks, units and array shapes before replacing the
+destination atomically; same-path saves are supported. Loaded channel collections
+replace their stored counterparts, including channel removals. Marker residuals,
+camera visibility, virtual status and source frame offsets are preserved/cropped.
+Analog/EMG units and channel identifiers are retained.
 
-Use TRC/MOT for transformed OpenSim inputs and DataFrames for analysis tables.
-Keep the original recording. The
-[remaining-issues page](../remaining-issues.md) specifies the fixes and round-trip
-checks needed for general HDF5 saving.
+When clocks change, opaque events, rigid bodies and unlabeled trajectories move
+under `SourceData`, explicitly scoped to the original recording. They are not
+silently presented as aligned annotations for the cropped trial. IK/ID column
+units and result-removal semantics still have the limitations listed in
+[remaining issues](../remaining-issues.md).
 
 ## Organize a participant's trials
 
@@ -123,6 +126,6 @@ print(subject.get_trial_by_idx(0))
 print(subject.trials.keys())
 ```
 
-Use this explicit construction instead of `H5Handler.load_subject_data()`, whose
-implementation still calls an obsolete loader. See
+Alternatively, `H5Handler.load_subject_data()` builds the subject from file
+metadata and attaches the loaded trial. See
 [results and subjects](results-and-subjects.md) for combining trial tables.

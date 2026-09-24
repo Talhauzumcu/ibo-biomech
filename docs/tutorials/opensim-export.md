@@ -6,14 +6,13 @@ Python bindings.
 
 ## Export a processed C3D trial
 
-This workflow exports the containers you actually processed. It avoids the
-current force-geometry mismatch in the intermediate HDF5 route. Replace the
-input path and confirm the coordinate transform before using your data.
+This workflow exports the processed containers. Replace the input path and
+confirm the coordinate transform before using your data. Current-format HDF5
+exports use the same validated force/vector representation.
 
-The example assumes a Z-up lab frame, horizontal force plates whose free moment
-is along Z, forces in N, and lengths in mm or m. Its -90-degree X rotation maps
-+Z to +Y. The current `write_mot()` places scalar `Tz` in the Y torque column;
-other rotations or tilted plates need a more general free-moment implementation.
+The example assumes a Z-up lab frame, forces in N, and lengths in mm or m. Its
+-90-degree X rotation maps +Z to +Y. `write_mot()` exports all three components
+of the rotated moment-at-CoP vector, including for tilted plates.
 
 ```python
 from copy import deepcopy
@@ -87,7 +86,7 @@ assert np.allclose(marker_at(first_marker.name), first_marker.data.T)
 grf = read_mot(str(output / "walking_grf.mot"))
 assert np.allclose(grf["time"], first_plate.time)
 assert np.allclose(grf["ground_force_1_vy"], first_plate.Fy)
-assert np.allclose(grf["ground_moment_1_my"], first_plate.Tz)
+assert np.allclose(grf["ground_moment_1_my"], first_plate.Tz[1])
 ```
 
 `read_mot()` and `read_sto()` return dictionaries of arrays plus `metadata`.
@@ -105,11 +104,11 @@ The OpenSim methods accept `axis`, `angle`, and `convert_to_meters` (not
 | --- | --- | --- |
 | `c3d_to_h5` | `c3d_path, h5_path` | Also accepts metadata keywords; preserves source coordinates and units. |
 | `h5_to_trc` | `h5_path, trc_path` | Marker export. |
-| `h5_to_mot` | `h5_path, mot_path` | Force export; currently affected by HDF5 geometry mismatch. |
+| `h5_to_mot` | `h5_path, mot_path` | Force and full moment-at-CoP vector export. |
 | `h5_to_opensim` | `h5_path, mot_path, trc_path` | Calls both HDF5 exporters. |
-| `c3d_to_trc` | `c3d_path, trc_path` | Uses an intermediate HDF5; currently requires analog channels. |
-| `c3d_to_mot` | `c3d_path, mot_path` | Uses the affected HDF5 force-export route. |
-| `c3d_to_opensim` | `c3d_path, mot_path, trc_path` | Uses the affected HDF5 force-export route. |
+| `c3d_to_trc` | `c3d_path, trc_path` | Uses an intermediate current-format HDF5. |
+| `c3d_to_mot` | `c3d_path, mot_path` | Uses the current HDF5 force-export route. |
+| `c3d_to_opensim` | `c3d_path, mot_path, trc_path` | Uses the current HDF5 force-export route. |
 
 For a C3D recording with analog channels, this alternative creates HDF5 metadata
 and exports its markers:

@@ -104,9 +104,9 @@ def write_mot(output_filepath: str, forces: dict, time: np.ndarray = None) -> No
         """Write force plate data to an OpenSim-compatible MOT file.
 
         Writes nine columns per plate: force (vx, vy, vz), centre of pressure
-        (px, py, pz) and moment (mx, my, mz). 
-        WARNING: All moments except the y-component(Free moment) are set to zero. As during 
-        normal gait the vertical axis free moment is the only possible moment that can be generated.
+        (px, py, pz) and the full moment-at-CoP vector (mx, my, mz).
+        All vectors must already be in the intended export frame. The clock
+        defaults to the first plate's time and every plate must align with it.
 
         Args:
             output_filepath: Path for the output MOT file.
@@ -123,10 +123,22 @@ def write_mot(output_filepath: str, forces: dict, time: np.ndarray = None) -> No
         num_plates = len(forces)
         first_force = next(iter(forces.values()))
         num_samples = first_force.num_samples
-        sampling_rate = first_force.sampling_rate if first_force.sampling_rate else 'Unknown'
+        sampling_rate = first_force.sampling_rate
         # Calculate number of columns: time + 9 columns per force plate (vx,vy,vz,px,py,pz,mx,my,mz)
         num_columns = 1 + (num_plates * 9)
-        time = time if time is not None else np.arange(num_samples) / sampling_rate
+        from ibo_biomech.containers._validation import validate_clock
+        if time is None:
+            time = first_force.time
+        if time is None:
+            if sampling_rate is None:
+                raise ValueError('MOT export requires a time vector or sampling rate.')
+            time = np.arange(num_samples) / sampling_rate
+        validate_clock(time, num_samples, sampling_rate)
+        for plate in forces.values():
+            plate.validate()
+            if plate.num_samples != num_samples or (
+                    plate.time is not None and not np.allclose(plate.time, time, rtol=0, atol=1e-9)):
+                raise ValueError('All force plates must share the MOT clock.')
         with open(output_filepath, 'w') as f:
             # Header
             f.write(f"nColumns={num_columns}\n")
@@ -160,9 +172,9 @@ def write_mot(output_filepath: str, forces: dict, time: np.ndarray = None) -> No
                     pz = plate.cop[2, sample_idx]
 
                     # Moment (mx, my, mz)
-                    mx = 0
-                    my = plate.Tz[sample_idx]
-                    mz = 0
+                    mx = plate.Tz[0, sample_idx]
+                    my = plate.Tz[1, sample_idx]
+                    mz = plate.Tz[2, sample_idx]
 
                     line += f"\t{fx}\t{fy}\t{fz}"
                     line += f"\t{px}\t{py}\t{pz}"
@@ -328,11 +340,18 @@ def get_fp_cs(fp_corners):
     Returns:
         The force plate coordinate system (3x3 array) and the origin (3x1 array).
     """
+    fp_corners = np.asarray(fp_corners, dtype=float)
+    if fp_corners.shape != (3, 4) or not np.all(np.isfinite(fp_corners)):
+        raise ValueError('Force-plate corners must be a finite (3, 4) array.')
     origin = np.mean(fp_corners, axis=1)
     y_axis = ((fp_corners[:,0] + fp_corners[:,1]) / 2) - origin
     x_axis = ((fp_corners[:,0] + fp_corners[:,3]) / 2) - origin
     z_axis = np.cross(x_axis, y_axis)
+    if np.linalg.norm(x_axis) < 1e-12 or np.linalg.norm(z_axis) < 1e-12:
+        raise ValueError('Force-plate corners must span a nondegenerate plane.')
     x_axis /= np.linalg.norm(x_axis)
-    y_axis /= np.linalg.norm(y_axis)
     z_axis /= np.linalg.norm(z_axis)
+    # Measured corners are not perfectly rectangular. Rebuild Y perpendicular
+    # to X and the plate normal so the result is a proper rotation matrix.
+    y_axis = np.cross(z_axis, x_axis)
     return np.column_stack((x_axis, y_axis, z_axis)), origin

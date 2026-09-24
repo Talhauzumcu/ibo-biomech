@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from ibo_biomech.utils.utils import *
 from ._mixins import ArrayLikeMixin
+from ._validation import validate_clock
 
 @dataclass
 class ForceData(ArrayLikeMixin):
@@ -27,8 +28,9 @@ class ForceData(ArrayLikeMixin):
         position: Plate center position in 3D mocap coordinate system, shape ``(3, n_samples)``.
         rotation: Plate orientation matrices, shape ``(3, 3, n_samples)``.
         origin: Origin offset relative to the corners, shape ``(3, 1)``.
-        Tz: Vertical free moment used for gait-event detection, shape
-            ``(n_samples,)``.
+        Tz: Full moment-at-CoP vector, shape ``(3, n_samples)``, expressed
+            in the same declared frame as force and CoP (not a scalar Z value).
+        Missing geometry: Stored as NaN; finite rotation matrices are validated.
         coordinateSystem: ``1`` if data is in global coordinates, ``0`` if local.
         metadata: Raw plate metadata (units, calibration matrix, corners, ...).
         sampling_rate: Sampling frequency in Hz. Required for filtering.
@@ -38,202 +40,189 @@ class ForceData(ArrayLikeMixin):
         unit_cop: Centre-of-pressure unit, derived from ``metadata``.
     """
     name: str
-    force: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Fx, Fy, Fz
-    moment: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Mx, My, Mz
-    cop: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))  # (3, n_samples) - Center of Pressure x, y, z
-    corners: np.ndarray = field(default_factory=lambda: np.zeros((3, 4, 1))) # (3, 4, n_samples) - Location forceplate corners (4 corners with x, y, z coordinates)
-    position: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # (3, n_samples) - Position of force plate center (in the 3D mocap coordinate system)
-    rotation: np.ndarray = field(default_factory=lambda: np.zeros((3, 3, 1))) # (3, 3, n_samples) - Rotation matrix of force plate orientation 
-    origin: np.ndarray = field(default_factory=lambda: np.zeros((3, 1))) # ndarray(3, 1) - forceplate origin offset under corners. This is same as c3d plate corners. So [0,0,x] where x is the offset
-    Tz: np.ndarray = field(default_factory=lambda: np.zeros((1,))) # (n_samples,) - Vertical force component used for gait event detection
-    coordinateSystem: bool = field(default_factory=lambda: 1) # is forceplate data saved in (1 = global, 0 = local) coordinates
+    force: np.ndarray = field(default_factory=lambda: np.zeros((3, 1)))
+    moment: Optional[np.ndarray] = None
+    cop: Optional[np.ndarray] = None
+    corners: Optional[np.ndarray] = None
+    position: Optional[np.ndarray] = None
+    rotation: Optional[np.ndarray] = None
+    origin: Optional[np.ndarray] = None
+    Tz: Optional[np.ndarray] = None
+    coordinateSystem: int = 1
     metadata: Dict = field(default_factory=dict)
-    sampling_rate: float = None
+    sampling_rate: Optional[float] = None
     time: Optional[np.ndarray] = None
 
     def __post_init__(self):
-        """Clean NaNs, parse unit metadata and cache the sample count."""
+        """Initialize absent signals at full length and mark unknown geometry NaN.
+
+        Static geometry may be supplied without a time axis or with one sample.
+        It is expanded to the signal length. Free moments must always contain
+        three components; scalar free moments are not accepted.
+        """
+        self.force = np.array(self.force, dtype=float, copy=True)
+        if self.force.ndim != 2 or self.force.shape[0] != 3 or not self.force.shape[1]:
+            raise ValueError('Force array must have shape (3, n_samples), n_samples > 0.')
+        self.num_samples = self.force.shape[1]
+        self.metadata = dict(self.metadata)
+        n = self.num_samples
+        for name in ('moment', 'cop', 'Tz'):
+            value = getattr(self, name)
+            setattr(self, name, np.zeros((3, n)) if value is None else np.array(value, dtype=float, copy=True))
+        for name, shape in [('corners', (3, 4)), ('position', (3,)), ('rotation', (3, 3))]:
+            value = getattr(self, name)
+            if value is None:
+                value = np.full((*shape, n), np.nan)
+            else:
+                value = np.array(value, dtype=float, copy=True)
+                if value.shape == shape:
+                    value = value[..., None]
+                if value.shape == (*shape, 1):
+                    value = np.repeat(value, n, axis=-1)
+            setattr(self, name, value)
+        self.origin = (np.full((3, 1), np.nan) if self.origin is None
+                       else np.array(self.origin, dtype=float, copy=True).reshape(3, 1))
+        if self.time is not None:
+            self.time = np.array(self.time, dtype=float, copy=True)
+        elif self.sampling_rate is not None:
+            validate_clock(None, n, self.sampling_rate)
+            self.time = np.arange(n) / self.sampling_rate
         self.clean_nan()
         self._parse_metadata()
-        self.num_samples = self.force.shape[1]
-        assert self.force.shape[0] == 3, "Force array must have shape (3, n_samples)"
+        self.validate()
 
-        if self.time is None and self.sampling_rate is not None:
-            self.time = np.arange(self.num_samples) / self.sampling_rate
-            
     def _parse_metadata(self) -> None:
-        """Populate ``unit_force``, ``unit_moment`` and ``unit_cop`` from metadata."""
         self.unit_force = self.metadata.get('unit_force', 'Unknown')
         self.unit_moment = self.metadata.get('unit_moment', 'Unknown')
         self.unit_cop = self.metadata.get('unit_position', 'Unknown')
 
-    def get_force_magnitude(self) -> np.ndarray:
-        """Return the magnitude of the force vector per sample.
+    def validate(self):
+        """Reject malformed signals/geometry before a processing operation.
 
-        Returns:
-            Array of shape ``(n_samples,)`` with the Euclidean norm of the force vector at each time point.
+        A wholly NaN geometry sample means unknown, never an identity/zero pose.
+        Supplied orientations must be proper orthonormal rotation matrices.
         """
-        return np.sqrt(np.sum(self.force**2, axis=0))
+        n = self.num_samples
+        for name, shape in [('force', (3, n)), ('moment', (3, n)), ('cop', (3, n)),
+                            ('Tz', (3, n)), ('position', (3, n)), ('corners', (3, 4, n)),
+                            ('rotation', (3, 3, n)), ('origin', (3, 1))]:
+            value = np.asarray(getattr(self, name))
+            if value.shape != shape:
+                raise ValueError(f'{name} must have shape {shape}, got {value.shape}.')
+            if name in ('force', 'moment', 'cop', 'Tz'):
+                if not np.all(np.isfinite(value)):
+                    raise ValueError(f'{name} contains nonfinite values; clean them before processing.')
+            else:
+                samples = value.reshape(-1, value.shape[-1])
+                valid = np.all(np.isfinite(samples), axis=0) | np.all(np.isnan(samples), axis=0)
+                if not np.all(valid):
+                    raise ValueError(f'{name} must be finite or wholly unknown (NaN) per sample.')
+        rotations = np.moveaxis(self.rotation, -1, 0)
+        rotations = rotations[np.isfinite(rotations).all(axis=(1, 2))]
+        if len(rotations) and (not np.allclose(rotations.transpose(0, 2, 1) @ rotations, np.eye(3), atol=1e-6)
+                               or not np.allclose(np.linalg.det(rotations), 1., atol=1e-6)):
+            raise ValueError('rotation must contain proper orthonormal matrices (determinant +1).')
+        if self.coordinateSystem not in (0, 1):
+            raise ValueError('coordinateSystem must be 0 (local) or 1 (global).')
+        return validate_clock(self.time, n, self.sampling_rate)
+
+    def get_force_magnitude(self) -> np.ndarray:
+        """Return the force magnitude at each sample."""
+        return np.linalg.norm(self.force, axis=0)
 
     def clean_nan(self) -> None:
-        """Replace NaN values in all signal and geometry arrays with zeros."""
-        self.force = np.nan_to_num(self.force)
-        self.moment = np.nan_to_num(self.moment)
-        self.cop = np.nan_to_num(self.cop)
-        self.corners = np.nan_to_num(self.corners)
-        self.position = np.nan_to_num(self.position)
-        self.rotation = np.nan_to_num(self.rotation)
-        self.Tz = np.nan_to_num(self.Tz)
+        """Replace nonfinite signal values with zeros; preserve unknown geometry."""
+        for name in ('force', 'moment', 'cop', 'Tz'):
+            setattr(self, name, np.nan_to_num(getattr(self, name), nan=0., posinf=0., neginf=0.))
+
+    def _filter(self, cutoff, order, btype):
+        rate = self.validate()
+        values = {name: apply_filter(getattr(self, name), rate, cutoff, order, btype=btype, axis=1)
+                  for name in ('force', 'moment', 'cop', 'Tz')}
+        for name, value in values.items():
+            setattr(self, name, value)
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
-        """Apply a zero-phase low-pass Butterworth filter to force, moment and CoP.
- 
-        Args:
-            cutoff: Cutoff frequency in Hz.
-            order: Filter order. Defaults to 4.
- 
-        Raises:
-            ValueError: If ``sampling_rate`` is not set.
-        """
-        self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='low', axis=1)
-        self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='low', axis=1)
-        self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='low', axis=1)
-        self.Tz = apply_filter(self.Tz, self.sampling_rate, cutoff, order, btype='low', axis=0)
-        self.position = apply_filter(self.position, self.sampling_rate, cutoff, order, btype='low', axis=1)
-
+        """Low-pass force, moment, CoP and free moment; leave geometry unchanged."""
+        self._filter(cutoff, order, 'low')
 
     def highpass_filter(self, cutoff: float, order: int = 4) -> None:
-        """Apply a zero-phase high-pass Butterworth filter to force, moment and CoP.
- 
-        Args:
-            cutoff: Cutoff frequency in Hz.
-            order: Filter order. Defaults to 4.
- 
-        Raises:
-            ValueError: If ``sampling_rate`` is not set.
-        """
-        self.force = apply_filter(self.force, self.sampling_rate, cutoff, order, btype='high', axis=1)
-        self.moment = apply_filter(self.moment, self.sampling_rate, cutoff, order, btype='high', axis=1)
-        self.cop = apply_filter(self.cop, self.sampling_rate, cutoff, order, btype='high', axis=1)
-        self.Tz = apply_filter(self.Tz, self.sampling_rate, cutoff, order, btype='high', axis=0)
-        self.position = apply_filter(self.position, self.sampling_rate, cutoff, order, btype='high', axis=1)
+        """High-pass force, moment, CoP and free moment; leave geometry unchanged."""
+        self._filter(cutoff, order, 'high')
 
     def filter_low_forces(self, threshold: float = 10.0) -> None:
-        """Zero out frames whose force magnitude is below a threshold.
-
-        Force, moment and CoP are set to zero wherever the force magnitude is
-        below ``threshold``, removing spurious readings during swing phases.
-
-        Args:
-            threshold: Force magnitude below which frames are zeroed, in newtons.
-                Defaults to 10.0.
-        """
-        force_magnitude = self.get_force_magnitude()
-        low_force_indices = force_magnitude < threshold
-        self.force[:, low_force_indices] = 0
-        self.moment[:, low_force_indices] = 0
-        self.cop[:, low_force_indices] = 0
-        self.Tz[low_force_indices] = 0
+        """Zero all signals at unloaded samples, without changing plate geometry."""
+        self.validate()
+        if not np.isfinite(threshold) or threshold < 0:
+            raise ValueError('Threshold must be finite and nonnegative.')
+        mask = self.get_force_magnitude() < threshold
+        values = {name: np.where(mask[None, :], 0., getattr(self, name))
+                  for name in ('force', 'moment', 'cop', 'Tz')}
+        for name, value in values.items():
+            setattr(self, name, value)
 
     def downsample(self, factor: int) -> None:
-        """Downsample force, moment and CoP in place using FIR decimation.
+        """Anti-alias signals; sample clocks and geometry at original indices.
 
-        Updates ``sampling_rate`` accordingly. Uses zero-phase decimation.
-
-        Args:
-            factor: Integer downsampling factor.
+        Uniform timestamps and a consistent positive rate are required. A rate
+        may be inferred from a supplied clock. With neither, time stays unknown.
+        Rejected operations leave every array and metadata field unchanged.
         """
+        if isinstance(factor, (bool, np.bool_)) or not isinstance(factor, (int, np.integer)) or factor <= 0:
+            raise ValueError('Downsampling factor must be a positive integer.')
+        rate = self.validate()
+        if factor == 1:
+            return
         from scipy.signal import decimate
-        self.force = decimate(self.force, factor, axis=1, ftype='fir', zero_phase=True)
-        self.moment = decimate(self.moment, factor, axis=1, ftype='fir', zero_phase=True)
-        self.cop = decimate(self.cop, factor, axis=1, ftype='fir', zero_phase=True)
-        self.time = decimate(self.time, factor, ftype='fir', zero_phase=True) if self.time is not None else None
-        self.Tz = decimate(self.Tz, factor, ftype='fir', zero_phase=True)
-        self.corners = decimate(self.corners, factor, axis=2, ftype='fir', zero_phase=True)
-        self.position = decimate(self.position, factor, axis=1, ftype='fir', zero_phase=True)
-        self.rotation = decimate(self.rotation, factor, axis=2, ftype='fir', zero_phase=True)
-
+        values = {name: decimate(getattr(self, name), int(factor), axis=1, ftype='fir', zero_phase=True)
+                  for name in ('force', 'moment', 'cop', 'Tz')}
+        values.update({name: getattr(self, name)[..., ::factor].copy()
+                       for name in ('corners', 'position', 'rotation')})
+        time = self.time[::factor].copy() if self.time is not None else None
+        for name, value in values.items():
+            setattr(self, name, value)
+        self.time = time
+        self.sampling_rate = rate / factor if rate is not None else None
         self._update_num_samples()
-        if self.sampling_rate:
-            self.sampling_rate /= factor
 
     def crop(self, start_idx: int, end_idx: int) -> None:
-        """Crop all signal and geometry arrays to ``[start_idx, end_idx)``.
-
-        Args:
-            start_idx: First sample index to keep.
-            end_idx: First sample index to drop (exclusive).
-        """
+        """Crop every sampled array to [start_idx, end_idx)."""
+        self.validate()
         validate_crop_range(start_idx, end_idx, self.num_samples)
-        
-        self.force = self.force[:, start_idx:end_idx]
-        self.moment = self.moment[:, start_idx:end_idx]
-        self.cop = self.cop[:, start_idx:end_idx]
-        self.corners = self.corners[:, :, start_idx:end_idx]
-        self.position = self.position[:, start_idx:end_idx]
-        self.rotation = self.rotation[:, :, start_idx:end_idx]
-        self.Tz = self.Tz[start_idx:end_idx]
-        self.time = self.time[start_idx:end_idx] if self.time is not None else None
+        for name in ('force', 'moment', 'cop', 'corners', 'position', 'rotation', 'Tz'):
+            setattr(self, name, getattr(self, name)[..., start_idx:end_idx].copy())
+        self.time = self.time[start_idx:end_idx].copy() if self.time is not None else None
         self._update_num_samples()
 
     def rotate(self, axis: str, angle_deg: float) -> None:
-        """Rotate force, moment, CoP, position and orientation about an axis.
+        """Rotate all vectors/geometry in their declared frame; origin stays local."""
+        self.validate()
+        if not np.isfinite(angle_deg):
+            raise ValueError('Rotation angle must be finite.')
+        matrix = get_rotation_matrix(axis, angle_deg)
+        values = {name: self._rotate(matrix, getattr(self, name))
+                  for name in ('force', 'moment', 'cop', 'position', 'rotation', 'Tz', 'corners')}
+        for name, value in values.items():
+            setattr(self, name, value)
 
-        Args:
-            axis: Axis to rotate about (``'x'``, ``'y'`` or ``'z'``).
-            angle_deg: Rotation angle in degrees.
-        """
-        rotation_matrix = get_rotation_matrix(axis, angle_deg)
-        self.force = self._rotate(rotation_matrix, self.force)
-        self.moment = self._rotate(rotation_matrix, self.moment)
-        self.cop = self._rotate(rotation_matrix, self.cop)
-        self.position = self._rotate(rotation_matrix, self.position)
-        self.rotation = self._rotate(rotation_matrix, self.rotation)
-
-        for i in range(self.corners.shape[1]):  # Rotate each corner
-            self.corners[:, i, :] = self._rotate(rotation_matrix, self.corners[:, i, :])
-
-    def _rotate(self, rotation_matrix: np.ndarray, data: np.ndarray) -> np.ndarray:
-        if len(data.shape) == 2:
-            return rotation_matrix @ data
-        _data = np.moveaxis(data, -1, 0)  # Move time to first
-        rotated_data = rotation_matrix @ _data  # Apply rotation
-        return np.moveaxis(rotated_data, 0, -1)  # Move time back to first axis
+    def _rotate(self, matrix, data):
+        return np.einsum('ij,j...->i...', matrix, data)
 
     def convert_units(self, target_unit: str) -> None:
-        """Convert position-derived quantities to a target length unit in place.
-
-        Scales moment, CoP and ``Tz`` and updates the unit labels. Moments are
-        typically in ``N·mm`` and CoP in ``mm``. No-op if already in
-        ``target_unit``.
-
-        Args:
-            target_unit: Desired length unit (``'mm'`` or ``'m'``).
-
-        Raises:
-            ValueError: If the requested conversion is not supported.
-        """
-        conversion_factors = {
-            ('mm', 'm'): 0.001,
-            ('m', 'mm'): 1000,
-        }
+        """Convert all length-derived quantities, including geometry/free moment."""
+        self.validate()
         if self.unit_cop == target_unit:
             return
-        key = (self.unit_cop, target_unit)
-        if key not in conversion_factors:
-            raise ValueError(f"Unsupported unit conversion: {self.unit_cop} to {target_unit}")
-        factor = conversion_factors[key]
-        self.moment *= factor
-        self.cop *= factor
-        self.Tz *= factor
-        self.position *= factor
-        self.corners *= factor
-        self.origin *= factor
-
-        self.unit_moment = f'N{target_unit}'
-        self.unit_cop = target_unit
-        self.metadata['unit_moment'] = self.unit_moment
-        self.metadata['unit_position'] = self.unit_cop
+        factors = {('mm', 'm'): .001, ('m', 'mm'): 1000.}
+        if (self.unit_cop, target_unit) not in factors:
+            raise ValueError(f'Unsupported unit conversion: {self.unit_cop} to {target_unit}')
+        factor = factors[self.unit_cop, target_unit]
+        values = {name: getattr(self, name) * factor
+                  for name in ('moment', 'cop', 'Tz', 'position', 'corners', 'origin')}
+        for name, value in values.items():
+            setattr(self, name, value)
+        self.unit_moment, self.unit_cop = f'N{target_unit}', target_unit
+        self.metadata.update(unit_moment=self.unit_moment, unit_position=self.unit_cop)
 
     def plot(self) -> None:
         """Plot force, moment and centre of pressure against time in three subplots."""
@@ -352,4 +341,3 @@ class ForceData(ArrayLikeMixin):
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
-

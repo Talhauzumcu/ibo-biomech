@@ -34,10 +34,32 @@ class MarkerData:
     sampling_rate: float = None
     time: Optional[np.ndarray] = None
     virtual: int = 0 #Whether the marker is virtual or measured.
+    residuals: Optional[np.ndarray] = None  # Source measurement residual; NaN = unknown.
+    camera_masks: Optional[np.ndarray] = None  # C3D visibility, shape (7, n).
+    sample_types: Optional[np.ndarray] = None  # Original per-frame HDF5 Type codes.
+    first_frame: int = 0  # Source frame index of the first retained sample.
 
     def __post_init__(self):
         if self.time is None and self.sampling_rate is not None:
             self.time = np.arange(len(self.x)) / self.sampling_rate
+        for name in ('residuals', 'camera_masks', 'sample_types'):
+            value = getattr(self, name)
+            if value is not None:
+                setattr(self, name, np.array(value, copy=True))
+        self.validate_sample_metadata()
+
+    def validate_sample_metadata(self):
+        """Check optional measurement metadata without inventing validity."""
+        for name, shape in [('residuals', (len(self.x),)),
+                            ('sample_types', (len(self.x),)),
+                            ('camera_masks', (7, len(self.x)))]:
+            value = getattr(self, name)
+            if value is not None:
+                value = np.asarray(value)
+                if value.shape != shape:
+                    raise ValueError(f'{name} must have shape {shape}.')
+        if not isinstance(self.first_frame, (int, np.integer)):
+            raise ValueError('first_frame must be an integer.')
             
     def get_trajectory(self) -> np.ndarray:
         """Return the trajectory stacked as a single array.
@@ -125,11 +147,17 @@ class MarkerData:
             end_idx: First sample index to drop (exclusive).
         """
         validate_crop_range(start_idx, end_idx, len(self.x))
+        self.validate_sample_metadata()
  
         self.x=self.x[start_idx:end_idx]
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
+        for name in ('residuals', 'camera_masks', 'sample_types'):
+            value = getattr(self, name)
+            if value is not None:
+                setattr(self, name, value[..., start_idx:end_idx].copy())
+        self.first_frame += start_idx
  
 
     def rotate(self, axis: str, angle_deg: float) -> None:
@@ -171,6 +199,8 @@ class MarkerData:
         self.x *= factor
         self.y *= factor
         self.z *= factor
+        if self.residuals is not None:
+            self.residuals = np.where(self.residuals >= 0, self.residuals * factor, self.residuals)
         self.unit = target_unit
 
     def plot(self) -> None:
@@ -205,10 +235,18 @@ class MarkerData:
 
         Raises:
             ValueError: If the two markers have different shapes.
+            ValueError: If the two markers have different time vectors.
+            ValueError: If the two markers have different units.
         """
         if self.x.shape != other.x.shape:
             raise ValueError("Cannot add MarkerData with different shapes.")
 
+        if self.time is not None and other.time is not None and not np.array_equal(self.time, other.time):
+            raise ValueError("Cannot add MarkerData with different time vectors.")
+
+        if self.unit != other.unit:
+            raise ValueError("Cannot add MarkerData with different units.")
+        
         name = f"{self.name}_plus_{other.name}"
         return MarkerData(
             name=name,
@@ -216,6 +254,8 @@ class MarkerData:
             y=self.y + other.y,
             z=self.z + other.z,
             sampling_rate=self.sampling_rate,
+            time=self.time.copy() if self.time is not None else None,
+            first_frame=self.first_frame,
             virtual = 1,
             unit=self.unit
         )
@@ -233,17 +273,25 @@ class MarkerData:
 
         Raises:
             ValueError: If dividing by a marker of a different shape.
+            ValueError: If dividing by a marker with a different time vector.
+            ValueError: If dividing by a marker with a different unit.
             ZeroDivisionError: If dividing by the scalar zero.
         """
         if isinstance(other, MarkerData):
             if self.x.shape != other.x.shape:
                 raise ValueError("Cannot divide MarkerData with different shapes.")
+            if self.time is not None and other.time is not None and not np.array_equal(self.time, other.time):
+                raise ValueError("Cannot divide MarkerData with different time vectors.")
+            if self.unit != other.unit:
+                raise ValueError("Cannot divide MarkerData with different units.")
             return MarkerData(
                 name=f"{self.name}_div_{other.name}",
                 x=self.x / other.x,
                 y=self.y / other.y,
                 z=self.z / other.z,
                 sampling_rate=self.sampling_rate,
+                time=self.time.copy() if self.time is not None else None,
+                first_frame=self.first_frame,
                 virtual=1,
                 unit=self.unit
             )
@@ -256,6 +304,8 @@ class MarkerData:
                 y=self.y / other,
                 z=self.z / other,
                 sampling_rate=self.sampling_rate,
+                time=self.time.copy() if self.time is not None else None,
+                first_frame=self.first_frame,
                 virtual=1,
                 unit=self.unit
             )

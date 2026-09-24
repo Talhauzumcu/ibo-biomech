@@ -70,7 +70,8 @@ class TrialData:
                     data=analog.data,
                     sampling_rate=analog.sampling_rate,
                     unit=analog.unit,
-                    channel=analog.channel
+                    channel=analog.channel,
+                    time=analog.time
                 )
                 self.emgs[analog.name] = emg
 
@@ -298,8 +299,8 @@ class TrialData:
                 df[f'{key}_Mx'] = value.Mx
                 df[f'{key}_My'] = value.My
                 df[f'{key}_Mz'] = value.Mz
-                df[f'{key}_CoPx'] = value.CoPx
-                df[f'{key}_CoPy'] = value.CoPy
+                df[f'{key}_cop_x'] = value.cop_x
+                df[f'{key}_cop_y'] = value.cop_y
             else:
                 df[key] = value.data
         for key, value in self.metadata.items():

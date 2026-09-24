@@ -89,10 +89,12 @@ def test_lowpass_filter_markers_analogs_forces_are_independent(trial):
 
 
 def test_parse_emg_data_from_analog_channel(trial, analog_kwargs):
+    trial.analogs[analog_kwargs['name']].time += 5.
     trial.parse_EMG_data([analog_kwargs["channel"]])
     assert analog_kwargs["name"] in trial.emgs
     emg = trial.emgs[analog_kwargs["name"]]
     assert emg.channel == analog_kwargs["channel"]
+    np.testing.assert_array_equal(emg.time, trial.analogs[analog_kwargs['name']].time)
 
 
 def test_add_marker_overwrites_same_name(trial, marker_kwargs):

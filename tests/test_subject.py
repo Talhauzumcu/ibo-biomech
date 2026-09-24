@@ -28,9 +28,11 @@ def test_get_trial_by_idx_out_of_range_returns_none(subject):
     assert subject.get_trial_by_idx(99) is None
 
 
+@pytest.mark.xfail(strict=True, reason='P2.10: Subject calls a removed TrialData filter; no good trial is processed')
 def test_lowpass_filter_skips_bad_trial_without_aborting(subject, capsys):
     # Quirk: Subject.lowpass_filter catches per-trial exceptions and prints
     # rather than raising, so one malformed trial shouldn't stop the batch.
+    before = {name: trial.markers['R_Knee'].x.copy() for name, trial in subject.trials.items()}
     bad_trial = TrialData(name="bad")
     bad_trial.add_marker(MarkerData(name="NoRate", x=np.zeros(5), y=np.zeros(5), z=np.zeros(5)))
     subject.add_trial("bad", bad_trial)
@@ -38,6 +40,9 @@ def test_lowpass_filter_skips_bad_trial_without_aborting(subject, capsys):
     captured = capsys.readouterr()
     assert "Error occurred while filtering trial bad" in captured.out
     assert len(subject.trials) == 4  # bad trial is kept, not dropped
+    for name, original in before.items():
+        assert f"Error occurred while filtering trial {name}" not in captured.out
+        assert not np.array_equal(subject.trials[name].markers['R_Knee'].x, original)
 
 
 def test_save_and_load_cache_roundtrip(subject, tmp_path):

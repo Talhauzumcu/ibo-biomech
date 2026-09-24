@@ -90,9 +90,10 @@ print(trial.marker_rate, trial.analog_rate, trial.force_rate)
 # analog = trial.get_analog_by_channel(3)
 ```
 
-A C3D handler's returned trial is a separate copy. Processing that trial does not
-update the handler's raw C3D structure. For processed TRC/MOT output, use the
-[export tutorial](docs/tutorials/opensim-export.md).
+A C3D handler shares its processed containers with the returned trial. Use
+`handler.write_c3d(path, trial)` for supported marker/analog edits, or
+`handler.write_raw_c3d(path)` for the original structure. Derived force edits
+belong in HDF5/MOT; see the [export tutorial](docs/tutorials/opensim-export.md).
 
 ## Current processing API
 
@@ -100,13 +101,13 @@ update the handler's raw C3D structure. For processed TRC/MOT output, use the
 | --- | --- | --- |
 | Filter markers | `trial.lowpass_filter_markers(cutoff_freq=6.0)` | Frequency in Hz; no automatic gap filling. |
 | Filter analogs | `trial.lowpass_filter_analogs(cutoff_freq=100.0)` | Cutoff must be below every affected channel's Nyquist frequency. |
-| Filter forces | `trial.lowpass_filter_forces(cutoff_freq=20.0)` | Also processes `Tz` and plate position in the current implementation. |
+| Filter forces | `trial.lowpass_filter_forces(cutoff_freq=20.0)` | Processes vector `Tz`; plate geometry stays unchanged. |
 | Filter EMG channels | `trial.lowpass_filter_emgs(cutoff_freq=10.0)` | Filters raw EMG; this is not the envelope pipeline. |
 | Filter one channel | `marker.lowpass_filter(cutoff=6.0)` | Channel methods use `cutoff`; trial methods use `cutoff_freq`. |
 | Fill marker gaps | `marker.clean_nan()` | Linear interpolation of interior NaNs; inspect gaps first. |
 | Crop one data type | `trial.crop("markers", 100, 200)` | End index excluded; indices belong to the selected data type. |
 | Rotate markers | `trial.rotate_markers(axis="x", angle_deg=-90)` | Requires the correct lab-to-model transform. |
-| Rotate forces | `trial.rotate_forces(axis="x", angle_deg=-90)` | See HDF5 geometry limitation before using loaded HDF5 forces. |
+| Rotate forces | `trial.rotate_forces(axis="x", angle_deg=-90)` | Rotates vectors and geometry in the declared frame. |
 | Convert units | `trial.convert_units("m")` | Supports mm ↔ m; force magnitudes remain unchanged. |
 | Select EMG channels | `trial.parse_EMG_data([3])` | Channel indices are zero-based for C3D imports. |
 | Attach results | `trial.attach_IK_results("ik.mot")` / `trial.attach_ID_results("id.sto")` | Results have named `Data` columns. |
@@ -118,15 +119,15 @@ select indices using each channel's time vector; see the processing tutorial.
 ## File conversion and results
 
 `FileConverter.c3d_to_h5(c3d_path, h5_path, **metadata)` writes an HDF5 file in
-acquisition coordinates and units. It currently requires analog channels.
+acquisition coordinates and units, including marker-only recordings. Only the
+current HDF5 force schema is supported; regenerate older files from C3D.
 
 OpenSim converters are `h5_to_trc`, `h5_to_mot`, `h5_to_opensim`, `c3d_to_trc`,
 `c3d_to_mot`, and `c3d_to_opensim`. Their defaults are `axis="x"`, `angle=-90`,
 and `convert_to_meters=True`. Those defaults describe one lab convention.
 The combined converters accept `(source_path, mot_path, trc_path)`.
 
-The current HDF5 geometry mismatch also affects the convenience force converters.
-The [export tutorial](docs/tutorials/opensim-export.md) shows a working route from
+The [export tutorial](docs/tutorials/opensim-export.md) shows a route from
 a processed C3D trial to TRC/MOT using `write_trc()` and `write_mot()`.
 
 ```python

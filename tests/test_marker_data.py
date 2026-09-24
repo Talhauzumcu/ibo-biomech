@@ -121,3 +121,30 @@ def test_midpoint_pattern_matches_readme_example(marker_data):
     mid = (marker_data + other) / 2
     assert np.allclose(mid.x, marker_data.x)  # identical inputs -> midpoint == either input
     assert mid.virtual == 1
+
+
+def test_add_preserves_offset_time(marker_data):
+    marker_data.time += 5.
+    combined = marker_data + marker_data
+    np.testing.assert_array_equal(combined.time, marker_data.time)
+
+
+@pytest.mark.parametrize('mismatch', ['unit', 'time'])
+def test_arithmetic_rejects_incompatible_markers(marker_data, mismatch):
+    from copy import deepcopy
+    other = deepcopy(marker_data)
+    if mismatch == 'unit':
+        other.convert_units('m')
+    else:
+        other.time += 1.
+    with pytest.raises(ValueError):
+        marker_data + other
+    with pytest.raises(ValueError):
+        marker_data / other
+
+
+@pytest.mark.parametrize('divisor', ['scalar', 'marker'])
+def test_division_preserves_offset_time(marker_data, divisor):
+    marker_data.time += 5.
+    result = marker_data / (2 if divisor == 'scalar' else marker_data)
+    np.testing.assert_array_equal(result.time, marker_data.time)
