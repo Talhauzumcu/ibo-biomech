@@ -13,4 +13,4 @@ from ibo_biomech.containers import Event
 from ibo_biomech.handlers import C3DHandler, H5Handler
 from ibo_biomech.analysis import GaitAnalyzer
 
-__version__ = "0.3.4"
+__version__ = "0.3.5"
