@@ -1,10 +1,5 @@
-# Add rigidBody class implementation
-# Add events parsing and class implementation
 # Add unlabeled trajectory implementation
 #IK and ID data should have residual informations
-#Force plate data regarding, location, rotation, position etc is not properly handled (because I don't know what is meant.)
 #Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?
-#Events from c3d need to be handled on c3d handler and also added to the fileconverter
 #unlabaled trajectories need to be handled
 #Subject class is not maintained.
-#sampling rate checks / automatic derivation from time should be implemented to all containers.
