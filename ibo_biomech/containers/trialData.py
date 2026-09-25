@@ -10,6 +10,8 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from ibo_biomech.utils.utils import read_sto, read_mot, time_normalize
 from .forceData import ForceData
+from .rigidBody import RigidBody
+from .events import Event
 from .markerData import MarkerData
 from .analogData import AnalogData
 from .emgData import EMGData
@@ -29,6 +31,8 @@ class TrialData:
         markers: Mapping of marker label to :class:`MarkerData`.
         analogs: Mapping of channel label to :class:`AnalogData`.
         forces: Mapping of plate name to :class:`ForceData`.
+        rigid_bodies: Mapping of body name to :class:`RigidBody`.
+        events: Ordered list of :class:`Event`; names may repeat.
         emgs: Mapping of channel name to :class:`EMGData`.
         metadata: Free-form trial metadata.
         marker_labels: Cached list of marker labels (set in ``__post_init__``).
@@ -44,6 +48,8 @@ class TrialData:
     metadata: Dict = field(default_factory=dict)
     ik_results: Optional[IKResults] = None
     id_results: Optional[IDResults] = None
+    rigid_bodies: Dict[str, RigidBody] = field(default_factory=dict)
+    events: List[Event] = field(default_factory=list)
 
     def __post_init__(self):
         """Cache convenience attributes (labels and sampling rates)."""
@@ -52,6 +58,7 @@ class TrialData:
         self.marker_rate = next(iter(self.markers.values())).sampling_rate if self.markers else None
         self.analog_rate = next(iter(self.analogs.values())).sampling_rate if self.analogs else None
         self.force_rate = next(iter(self.forces.values())).sampling_rate if self.forces else None
+        self.rigid_body_rate = next(iter(self.rigid_bodies.values())).sampling_rate if self.rigid_bodies else None
 
     def parse_EMG_data(self, EMGChannels: List[int]) -> None:
         """Build :class:`EMGData` entries from selected analog channels.
@@ -74,6 +81,28 @@ class TrialData:
                     time=analog.time
                 )
                 self.emgs[analog.name] = emg
+
+    def add_event(self, event: Event) -> None:
+        """Append an event, retaining repeated names and insertion order."""
+        if not isinstance(event, Event):
+            raise TypeError('event must be an Event instance.')
+        event.validate()
+        self.events.append(event)
+
+    def get_events(self, name: Optional[str] = None) -> List[Event]:
+        """Return all events, or every event with the given name."""
+        return [event for event in self.events if name is None or event.name == name]
+
+    def crop_events(self, start_frame: int, end_frame: int) -> None:
+        """Keep events in [start_frame, end_frame), using source frame numbers.
+
+        Frame numbers and timestamps are not rebased. Cropping other data types
+        via ``crop`` does not implicitly crop events.
+        """
+        if (any(isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer))
+                for value in (start_frame, end_frame)) or start_frame < 0 or end_frame <= start_frame):
+            raise ValueError('Event crop requires nonnegative integer frames with start < end.')
+        self.events[:] = [event for event in self.events if start_frame <= event.frame < end_frame]
 
     def attach_IK_results(self, ikresults_file: str) -> None:
         """Attach inverse kinematics results to the trial.
@@ -120,13 +149,24 @@ class TrialData:
             force.convert_units(target_unit)
 
     def convert_units(self, target_unit: str) -> None:
-        """Convert both markers and force plates to a target length unit.
+        """Convert markers, force plates and rigid bodies to a target length unit.
 
         Args:
             target_unit: Desired unit (``'mm'`` or ``'m'``).
         """
         self.convert_marker_units(target_unit)
         self.convert_force_units(target_unit)
+        self.convert_rigid_body_units(target_unit)
+
+    def convert_rigid_body_units(self, target_unit: str) -> None:
+        """Convert every rigid body's position to a target length unit."""
+        for body in self.rigid_bodies.values():
+            body.convert_units(target_unit)
+
+    def rotate_rigid_bodies(self, axis: str, angle_deg: float) -> None:
+        """Rotate every rigid body's pose about a global coordinate axis."""
+        for body in self.rigid_bodies.values():
+            body.rotate(axis, angle_deg)
 
     def rotate_forces(self, axis: str, angle_deg: float) -> None:
         """Rotate every force plate about an axis in place.
@@ -174,7 +214,8 @@ class TrialData:
         """Crop a specific data type to the same index range.
 
         Args:
-            data_type: Type of data to crop ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results').
+            data_type: Type of data to crop ('markers', 'analogs', 'forces', 'rigid_bodies', 'emgs', 'ik_results', 'id_results', 'events').
+                For events, indices are source frame numbers, not array indices.
             start_idx: First sample index to keep.
             end_idx: First sample index to drop (exclusive).
         """
@@ -190,12 +231,17 @@ class TrialData:
         elif data_type == 'emgs':
             for emg in self.emgs.values():
                 emg.crop(start_idx, end_idx)
+        elif data_type == 'rigid_bodies':
+            for body in self.rigid_bodies.values():
+                body.crop(start_idx, end_idx)
+        elif data_type == 'events':
+            self.crop_events(start_idx, end_idx)
         elif data_type == 'ik_results':
             self.ik_results.crop(start_idx, end_idx)
         elif data_type == 'id_results':
             self.id_results.crop(start_idx, end_idx)
         else:
-            raise ValueError(f"Unknown data type '{data_type}'. Must be one of: 'markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results'.")
+            raise ValueError(f"Unknown data type '{data_type}'. Must be one of: 'markers', 'analogs', 'forces', 'rigid_bodies', 'emgs', 'ik_results', 'id_results', 'events'.")
 
     def lowpass_filter_markers(self, cutoff_freq: float, order: int = 4) -> None:
         """Low-pass filter every marker in place.
@@ -268,6 +314,13 @@ class TrialData:
             print(f"[WARNING]: Analog sampling rate {analog_data.sampling_rate} for analog channel {analog_data.name} does not match trial analog rate {self.analog_rate}.")
         self.analogs[analog_data.name] = analog_data
         self.analog_labels = list(self.analogs.keys())  # Update cached analog labels
+
+    def add_rigid_body(self, rigid_body: RigidBody) -> None:
+        """Add (or replace) a rigid body, keyed by its name."""
+        if rigid_body.sampling_rate != self.rigid_body_rate and self.rigid_body_rate is not None:
+            print(f"[WARNING]: Rigid body sampling rate {rigid_body.sampling_rate} for rigid body {rigid_body.name} does not match trial rigid body rate {self.rigid_body_rate}.")
+        self.rigid_bodies[rigid_body.name] = rigid_body
+        self.rigid_body_rate = next(iter(self.rigid_bodies.values())).sampling_rate
         
     def add_emg(self, emg_data: EMGData) -> None:
         """Add (or replace) an EMG channel, keyed by its name.
@@ -301,6 +354,11 @@ class TrialData:
                 df[f'{key}_Mz'] = value.Mz
                 df[f'{key}_cop_x'] = value.cop_x
                 df[f'{key}_cop_y'] = value.cop_y
+            elif isinstance(value, RigidBody):
+                for axis, row in zip(('x', 'y', 'z'), value.position):
+                    df[f'{key}_{axis}'] = row
+                for angle, row in zip(('roll', 'pitch', 'yaw'), value.RPY):
+                    df[f'{key}_{angle}'] = row
             else:
                 df[key] = value.data
         for key, value in self.metadata.items():
@@ -333,6 +391,14 @@ class TrialData:
             Force plate names in insertion order.
         """
         return list(self.forces.keys())
+
+    def get_rigid_body_names(self) -> List[str]:
+        """Return rigid body names in insertion order."""
+        return list(self.rigid_bodies.keys())
+
+    def get_rigid_body(self, name: str) -> Optional[RigidBody]:
+        """Return a rigid body by name, or None if not found."""
+        return self.rigid_bodies.get(name)
 
     def get_marker(self, name: str) -> Optional[MarkerData]:
         """Look up a marker by name.
@@ -406,6 +472,8 @@ class TrialData:
         return (
             f"TrialData(name={self.name!r}, markers={len(self.markers)}, "
             f"analogs={len(self.analogs)}, forces={len(self.forces)}, "
+            f"rigid_bodies={len(self.rigid_bodies)}, "
+            f"events={len(self.events)}, "
             f"emgs={emgs}, ik_results={ik_results}," 
             f"id_results={id_results})"
         )

@@ -10,7 +10,8 @@ import h5py
 import numpy as np
 
 from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject, IKResults, IDResults, Data
-from ibo_biomech.containers._validation import collection_clock
+from ibo_biomech.containers import RigidBody, Event
+from ibo_biomech.containers._validation import collection_clock, frame_at_time, validate_clock
 from ._force_schema import read_plate, write_plate
 
 
@@ -56,7 +57,9 @@ class H5Handler:
                   load_forces: bool = True,
                   load_emgs: bool = True,
                   load_ik_results: bool = True,
-                  load_id_results: bool = True ) -> TrialData:
+                  load_id_results: bool = True,
+                  load_rigid_bodies: bool = True,
+                  load_events: bool = True ) -> TrialData:
         """Read the HDF5 file and return a fully populated trial. Accepts flags to selectively load specific data types for faster loading times
 
         Args:
@@ -66,15 +69,19 @@ class H5Handler:
             load_emgs: Whether to load EMG data.
             load_ik_results: Whether to load inverse kinematics results.
             load_id_results: Whether to load inverse dynamics results.
+            load_rigid_bodies: Whether to load rigid-body poses and marker names.
+            load_events: Whether to load named events, including repeated names.
         Returns:
             A :class:`~ibo_biomech.containers.TrialData` with markers, analogs,
-            forces and metadata.
+            forces, rigid bodies, events and metadata.
         """
 
         with h5py.File(self.h5_path, "r") as h5f:
             markers = self._load_markers(h5f) if load_markers else {}
             analogs = self._load_analogs(h5f) if load_analogs else {}
             forces = self._load_forces(h5f) if load_forces else {}
+            rigid_bodies = self._load_rigid_bodies(h5f) if load_rigid_bodies else {}
+            events = self._load_events(h5f) if load_events else []
             emgs = self._load_emgs(h5f) if load_emgs else {}
             ik_results = self._load_ik_results(h5f) if load_ik_results else None
             id_results = self._load_id_results(h5f) if load_id_results else None
@@ -85,6 +92,8 @@ class H5Handler:
             markers=markers,
             analogs=analogs,
             forces=forces,
+            rigid_bodies=rigid_bodies,
+            events=events,
             emgs=emgs,
             ik_results=ik_results,
             id_results=id_results,
@@ -93,7 +102,8 @@ class H5Handler:
 
         trial._unloaded_collections = {name for name, loaded in (
             ('markers', load_markers), ('analogs', load_analogs), ('forces', load_forces),
-            ('emgs', load_emgs), ('ik_results', load_ik_results), ('id_results', load_id_results)) if not loaded}
+            ('emgs', load_emgs), ('ik_results', load_ik_results), ('id_results', load_id_results),
+            ('rigid_bodies', load_rigid_bodies), ('events', load_events)) if not loaded}
         return trial
 
     def load_subject_data(self) -> Subject:
@@ -149,6 +159,18 @@ class H5Handler:
                 if name != plate.name:
                     raise ValueError('Force mapping keys must match plate names.')
                 plate.validate()
+        if 'rigid_bodies' not in skipped:
+            for name, body in trial.rigid_bodies.items():
+                if not isinstance(body.name, str) or name != body.name:
+                    raise ValueError('Rigid body mapping keys must match body names (strings).')
+                if not isinstance(body.markers, list) or not all(isinstance(marker, str) for marker in body.markers):
+                    raise ValueError('Rigid body markers must be a list of strings.')
+                body.validate()
+        if 'events' not in skipped:
+            for event in trial.events:
+                if not isinstance(event, Event):
+                    raise ValueError('Trial events must contain Event instances.')
+                event.validate()
         for name in ('ik_results', 'id_results'):
             result = getattr(trial, name)
             if name not in skipped and result is not None:
@@ -174,7 +196,9 @@ class H5Handler:
         """Validate then atomically replace loaded collections from a processed trial.
 
         Removed channels are removed on disk. Collections deliberately skipped
-        during load are preserved. If clocks change, opaque events/rigid bodies
+        during load are preserved. Typed events retain source frames and times;
+        crop them explicitly with TrialData.crop_events if desired.
+        If clocks change, opaque legacy events/rigid bodies
         and unlabeled trajectories are moved under SourceData, where they remain
         explicitly scoped to the source recording rather than the cropped trial.
         """
@@ -182,7 +206,7 @@ class H5Handler:
         skipped = getattr(trial, '_unloaded_collections', set())
         def update(h5f):
             self._archive_source_annotations(h5f, trial, skipped)
-            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results'):
+            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results', 'rigid_bodies', 'events'):
                 if name not in skipped:
                     getattr(self, f'_save_{name}')(h5f, trial)
             h5f.require_group('MetaData').attrs['LastUpdate'] = str(datetime.now())
@@ -211,9 +235,23 @@ class H5Handler:
                 changed |= plate is None or group['Force'].shape[-1] != plate.num_samples
                 if plate is not None and 'Time' in group:
                     changed |= plate.time is None or not np.array_equal(group['Time'][:], plate.time)
+        if ('rigid_bodies' not in skipped and 'RigidBodies' in h5f
+                and 'SchemaVersion' in h5f['RigidBodies'].attrs):
+            for group in h5f['RigidBodies'].values():
+                body = trial.rigid_bodies.get(group.attrs['Name'])
+                changed |= body is None or group['Position'].shape[-1] != body.num_samples
+                if body is not None and 'Time' in group:
+                    changed |= body.time is None or not np.array_equal(group['Time'][:], body.time)
         if not changed:
             return
-        for path in ('Events', 'RigidBodies', 'Trajectories/Unlabeled'):
+        paths = ['Trajectories/Unlabeled']
+        if ('events' not in skipped and 'Events' in h5f
+                and H5Handler._opaque_events(h5f['Events'])):
+            paths.append('Events')
+        if ('rigid_bodies' not in skipped and 'RigidBodies' in h5f
+                and 'SchemaVersion' not in h5f['RigidBodies'].attrs):
+            paths.append('RigidBodies')
+        for path in paths:
             if path in h5f:
                 target = 'SourceData/' + path
                 if target in h5f:
@@ -493,6 +531,165 @@ class H5Handler:
                 raise ValueError(f'Duplicate force plate name: {plate.name}')
             plates[plate.name] = plate
         return plates
+
+    def _save_rigid_bodies(self, h5f: h5py.File, trial: TrialData) -> None:
+        """Replace the typed collection; retain legacy opaque data in SourceData.
+
+        Schema 1 stores numbered body groups with Position, Rotation, Markers
+        (UTF-8 strings) and optional Time datasets. RPY is derived, not stored.
+        Unversioned legacy data is left untouched when no bodies are supplied.
+        """
+        if 'RigidBodies' in h5f:
+            group = h5f['RigidBodies']
+            if 'SchemaVersion' not in group.attrs and len(group):
+                if not trial.rigid_bodies:
+                    return
+                target = 'SourceData/RigidBodies'
+                if target in h5f:
+                    raise ValueError(f'Cannot archive RigidBodies: {target} already exists.')
+                h5f.require_group('SourceData').attrs['Scope'] = 'Original recording; not aligned to the processed trial clock'
+                h5f.move('RigidBodies', target)
+            else:
+                del h5f['RigidBodies']
+        if not trial.rigid_bodies:
+            return
+        group = h5f.create_group('RigidBodies', track_order=True)
+        group.attrs['SchemaVersion'] = 1
+        for index, body in enumerate(trial.rigid_bodies.values()):
+            target = group.create_group(str(index))
+            target.attrs.update(Name=body.name, NumSamples=body.num_samples, Unit=body.unit)
+            if body.sampling_rate is not None:
+                target.attrs['SamplingFrequency'] = body.sampling_rate
+            for key, value in [('Position', body.position), ('Rotation', body.rotation), ('Time', body.time)]:
+                self._replace_dataset(target, key, value)
+            target.create_dataset('Markers', data=body.markers, dtype=h5py.string_dtype('utf-8'))
+
+    def _load_rigid_bodies(self, h5f: h5py.File) -> Dict[str, RigidBody]:
+        """Load schema 1 poses; leave unversioned legacy payloads opaque."""
+        if 'RigidBodies' not in h5f:
+            return {}
+        collection = h5f['RigidBodies']
+        if 'SchemaVersion' not in collection.attrs:
+            return {}
+        if collection.attrs['SchemaVersion'] != 1:
+            raise ValueError('Only rigid body schema 1 is supported.')
+        bodies = {}
+        for group in collection.values():
+            if not isinstance(group, h5py.Group):
+                raise ValueError('RigidBodies entries must be body groups.')
+            missing = {'Position', 'Rotation', 'Markers'} - set(group)
+            if missing:
+                raise ValueError(f'{group.name}: missing required datasets: {sorted(missing)}.')
+            if not {'Name', 'NumSamples', 'Unit'} <= set(group.attrs):
+                raise ValueError(f'{group.name}: Name, NumSamples and Unit attributes are required.')
+            name = group.attrs['Name']
+            name = name.decode() if isinstance(name, bytes) else name
+            if not isinstance(name, str) or name in bodies:
+                raise ValueError(f'Invalid or duplicate rigid body name: {name!r}')
+            position, rotation = group['Position'][:], group['Rotation'][:]
+            if position.ndim != 2 or position.shape[0] != 3 or position.shape[1] == 0:
+                raise ValueError(f'{group.name}: Position must have shape (3, n_samples), n_samples > 0.')
+            n = position.shape[1]
+            if group.attrs['NumSamples'] != n or rotation.shape != (3, 3, n):
+                raise ValueError(f'{group.name}: NumSamples and Rotation must match Position.')
+            markers = group['Markers']
+            if markers.ndim != 1 or h5py.check_string_dtype(markers.dtype) is None:
+                raise ValueError(f'{group.name}: Markers must be a one-dimensional string dataset.')
+            unit = group.attrs['Unit']
+            unit = unit.decode() if isinstance(unit, bytes) else unit
+            bodies[name] = RigidBody(name=name, markers=self._decode_labels(markers[:]),
+                position=position, rotation=rotation, unit=unit,
+                sampling_rate=group.attrs.get('SamplingFrequency'),
+                time=group['Time'][:] if 'Time' in group else None)
+        return bodies
+
+    @staticmethod
+    def _opaque_events(group) -> bool:
+        """Identify legacy annotations without enough data to build Event objects."""
+        return 'SchemaVersion' not in group.attrs and 'LABELS' not in group.attrs
+
+    def _save_events(self, h5f: h5py.File, trial: TrialData) -> None:
+        """Replace events, preserving order, duplicates and source-frame clocks.
+
+        Events are not implicitly cropped when another collection changes.
+        Use TrialData.crop_events to explicitly select the desired frame range.
+        """
+        if 'Events' in h5f:
+            group = h5f['Events']
+            if self._opaque_events(group) and len(group):
+                if not trial.events:
+                    return
+                target = 'SourceData/Events'
+                if target in h5f:
+                    raise ValueError(f'Cannot archive Events: {target} already exists.')
+                h5f.require_group('SourceData').attrs['Scope'] = 'Original recording; not aligned to the processed trial clock'
+                h5f.move('Events', target)
+            else:
+                del h5f['Events']
+        if not trial.events:
+            return
+        group = h5f.create_group('Events')
+        group.attrs.update(SchemaVersion=1, Scope='Trial clock; zero-based source point frames; seconds')
+        for key, field in [('Name', 'name'), ('Description', 'description')]:
+            group.create_dataset(key, data=[getattr(event, field) for event in trial.events],
+                                 dtype=h5py.string_dtype('utf-8'))
+        for key, field, dtype in [('Frame', 'frame', np.int64), ('Time', 'time', float)]:
+            self._replace_dataset(group, key, np.array([getattr(event, field) for event in trial.events], dtype=dtype))
+
+    def _load_events(self, h5f: h5py.File) -> List[Event]:
+        """Load typed events or the converter's legacy Time/LABELS format."""
+        if 'Events' not in h5f:
+            return []
+        group = h5f['Events']
+        if self._opaque_events(group):
+            return []
+        if 'SchemaVersion' not in group.attrs:
+            labels = self._decode_labels(group.attrs['LABELS'])
+            if not labels:
+                return []
+            if 'Time' not in group or group['Time'].shape != (len(labels),):
+                raise ValueError('Legacy event Time must match LABELS.')
+            rate = h5f['Trajectories'].attrs.get('SamplingFrequency') if 'Trajectories' in h5f else None
+            if rate is None or not np.isfinite(rate) or rate <= 0:
+                raise ValueError('Legacy event frames require a positive trajectory sampling rate.')
+            first_frame = int(h5f['Trajectories'].attrs.get('StartFrame', 0))
+            first_time = first_frame / rate
+            if 'Trajectories/Labeled/Time' in h5f:
+                clock = h5f['Trajectories/Labeled/Time'][:]
+                if clock.size:
+                    validate_clock(clock, len(clock), rate)
+                    first_time = float(clock[0])
+            descriptions = self._decode_labels(group.attrs.get('DESCRIPTIONS', [''] * len(labels)))
+            if len(descriptions) != len(labels):
+                raise ValueError('Legacy event annotations must match LABELS.')
+            times = group['Time'][:]
+            if not np.isfinite(times).all() or (times < 0).any():
+                raise ValueError('Event time must be finite and nonnegative.')
+            return [Event(name, frame_at_time(time, rate, first_frame, first_time), float(time), description=description)
+                    for name, time, description in zip(labels, times, descriptions)]
+        if group.attrs['SchemaVersion'] != 1:
+            raise ValueError('Only event schema 1 is supported.')
+        required = {'Name', 'Frame', 'Time'}
+        if not required <= set(group):
+            raise ValueError('Events requires Name, Frame and Time datasets.')
+        if group['Name'].ndim != 1:
+            raise ValueError('Event Name must be a one-dimensional string dataset.')
+        count = len(group['Name'])
+        values = {}
+        for key, field in [('Name', 'name'), ('Frame', 'frame'), ('Time', 'time'),
+                           ('Description', 'description')]:
+            if key not in group:
+                continue
+            dataset = group[key]
+            if dataset.shape != (count,):
+                raise ValueError(f'Event {key} must match the event count.')
+            if field in ('name', 'description'):
+                if h5py.check_string_dtype(dataset.dtype) is None:
+                    raise ValueError(f'Event {key} must contain strings.')
+                values[field] = self._decode_labels(dataset[:])
+            else:
+                values[field] = dataset[:]
+        return [Event(**{field: value[index] for field, value in values.items()}) for index in range(count)]
 
     @staticmethod
     def _validate_marker_units(markers: Dict[str, MarkerData], expected_unit: str) -> None:

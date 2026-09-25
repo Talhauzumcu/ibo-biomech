@@ -63,15 +63,8 @@ class FileConverter:
             writer._save_analogs(h5f, trial)
             writer._save_forces(h5f, trial)
             h5f.create_group('RigidBodies')
-            events = h5f.create_group('Events')
-            events.attrs['Scope'] = 'Source recording; absolute seconds'
-            source_events = handler.c3d_data['parameters'].get('EVENT', {})
-            if 'TIMES' in source_events:
-                times = np.asarray(source_events['TIMES']['value'])
-                events.create_dataset('Time', data=times[0] * 60. + times[1])
-                for key in ('LABELS', 'CONTEXTS', 'DESCRIPTIONS'):
-                    if key in source_events:
-                        events.attrs[key] = source_events[key]['value']
+            writer._save_events(h5f, trial)
+            h5f.require_group('Events')
             h5f.create_group('CustomFields')
         return h5_path
 

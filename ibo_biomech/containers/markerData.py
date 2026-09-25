@@ -41,7 +41,7 @@ class MarkerData:
 
     def __post_init__(self):
         if self.time is None and self.sampling_rate is not None:
-            self.time = np.arange(len(self.x)) / self.sampling_rate
+            self.time = (self.first_frame + np.arange(len(self.x))) / self.sampling_rate
         for name in ('residuals', 'camera_masks', 'sample_types'):
             value = getattr(self, name)
             if value is not None:
@@ -203,6 +203,9 @@ class MarkerData:
             self.residuals = np.where(self.residuals >= 0, self.residuals * factor, self.residuals)
         self.unit = target_unit
 
+    def time_at_frame(self, frame_idx: int) -> float:
+        return self.time[frame_idx - self.first_frame] if self.time is not None else None
+
     def plot(self) -> None:
         """Plot the X, Y and Z trajectories against time in a single figure."""
         import matplotlib.pyplot as plt
@@ -219,6 +222,11 @@ class MarkerData:
 
     @property
     def data(self) -> np.ndarray:
+        """Return the trajectory as a single array of shape ``(3, n_samples)``."""
+        return self.get_trajectory()
+
+    @property
+    def position(self) -> np.ndarray:
         """Return the trajectory as a single array of shape ``(3, n_samples)``."""
         return self.get_trajectory()
     
@@ -322,3 +330,16 @@ class MarkerData:
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
+
+    def __getitem__(self, idx: int) -> np.ndarray:
+        """Return the 3D position of the marker at a specific sample index.
+        Args:
+            idx: Sample index (0-based).
+        Returns:
+            Array of shape ``(3,)`` with ``[x, y, z]`` at the specified index.
+        Raises:
+            IndexError: If the index is out of bounds.
+        """
+        if idx < 0 or idx >= self.x.shape[0]:
+            raise IndexError("Sample index out of bounds.")
+        return np.array([self.x[idx], self.y[idx], self.z[idx]])

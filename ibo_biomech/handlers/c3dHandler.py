@@ -2,11 +2,11 @@ from ezc3d import c3d
 import os
 import tempfile
 from typing import Dict, List, Optional, Tuple, Union
-from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData
+from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData, Event
 import numpy as np
 from copy import deepcopy
 from .h5Handler import H5Handler
-from ibo_biomech.containers._validation import collection_clock
+from ibo_biomech.containers._validation import collection_clock, frame_at_time
 from ibo_biomech.utils.utils import *
 
 class C3DHandler:
@@ -14,7 +14,7 @@ class C3DHandler:
 
     Wraps the :mod:`ezc3d` reader. After :meth:`load_data`, parsed channels are
     available as the :attr:`markers`, :attr:`analogs` and :attr:`forces`
-    dictionaries shared with the returned TrialData. The raw source structure
+    dictionaries and :attr:`events` list shared with the returned TrialData. The raw source structure
     remains separate and is written only by :meth:`write_raw_c3d`.
 
     Attributes:
@@ -23,6 +23,7 @@ class C3DHandler:
         markers: Mapping of marker label to :class:`~ibo_biomech.containers.MarkerData`.
         analogs: Mapping of channel label to :class:`~ibo_biomech.containers.AnalogData`.
         forces: Mapping of plate name to :class:`~ibo_biomech.containers.ForceData`.
+        events: List of :class:`~ibo_biomech.containers.Event`, retaining repeated names.
     """
 
     def __init__(self, filepath: Optional[str] = None):
@@ -38,13 +39,14 @@ class C3DHandler:
         self.markers: Dict[str, MarkerData] = {}
         self.analogs: Dict[str, AnalogData] = {}
         self.forces: Dict[str, ForceData] = {}
+        self.events: List[Event] = []
         self.trial = None
         self._source_forces = {}
 
     def load_data(self) -> TrialData:
         """Read the C3D file and parse it into container objects. Also creates and returns a TrialData instance same as h5handler.
 
-        Populates :attr:`markers`, :attr:`analogs` and :attr:`forces` and stores
+        Populates :attr:`markers`, :attr:`analogs`, :attr:`forces` and :attr:`events` and stores
         the raw structure on :attr:`c3d_data`.
 
         Returns:
@@ -62,13 +64,14 @@ class C3DHandler:
             self._parse_markers()
             self._parse_analogs()
             self._parse_force_plates()     
+            self._parse_events()
             self.is_loaded = True
 
         except Exception as e:
             raise Exception(f"Error loading C3D file: {str(e)}")
     
         self.trial = TrialData(name=self.trial_name, markers=self.markers,
-                               analogs=self.analogs, forces=self.forces)
+                               analogs=self.analogs, forces=self.forces, events=self.events)
         self._source_forces = deepcopy(self.forces)
         return self.trial
 
@@ -198,26 +201,77 @@ class C3DHandler:
             raise ValueError('Load a trial before adding markers.')
         self.trial.add_marker(marker)
 
+    def _parse_events(self) -> None:
+        """Read EVENT parameters, falling back to named legacy header events.
+
+        Parameter times use the trial clock; legacy header times are relative
+        to the first stored frame. Both are exposed on the marker clock.
+        """
+        self.events = []
+        rate = float(self.c3d_data['parameters']['POINT']['RATE']['value'][0])
+        if not np.isfinite(rate) or rate <= 0:
+            raise ValueError('Event parsing requires a positive point sampling rate.')
+        first_frame = int(self.c3d_data['header']['points']['first_frame'])
+        first_time = first_frame / rate
+        parameters = self.c3d_data['parameters'].get('EVENT')
+        if parameters is not None:
+            count = int(parameters.get('USED', {}).get('value', [0])[0])
+            if count == 0:
+                return
+            times = np.asarray(parameters.get('TIMES', {}).get('value', []))
+            labels = parameters.get('LABELS', {}).get('value', [])
+            if count < 0 or times.ndim != 2 or times.shape[0] != 2 or times.shape[1] < count or len(labels) < count:
+                raise ValueError('EVENT:USED, TIMES and LABELS must have matching event counts.')
+            descriptions = parameters.get('DESCRIPTIONS', {}).get('value', [])
+            # ezc3d may read an all-blank string parameter as [].
+            if len(descriptions) == 0:
+                descriptions = [''] * count
+            if len(descriptions) < count:
+                raise ValueError('EVENT:DESCRIPTIONS must match the event count.')
+            for index in range(count):
+                time = float(times[0, index] * 60. + times[1, index])
+                if not np.isfinite(time) or time < 0:
+                    raise ValueError('Event times must be finite and nonnegative.')
+                self.events.append(Event(name=labels[index], frame=frame_at_time(time, rate, first_frame, first_time),
+                                          time=time, description=descriptions[index]))
+        else:
+            header = self.c3d_data['header'].get('events', {})
+            for label, seconds in zip(header.get('events_label', ()), header.get('events_time', ())):
+                if label.strip():
+                    time = float(seconds + first_time)
+                    self.events.append(Event(name=label.strip(),
+                        frame=frame_at_time(time, rate, first_frame, first_time), time=time))
+
+    def add_event(self, event: Event) -> None:
+        """Append an event to the shared trial used by processed C3D export."""
+        if self.trial is None:
+            raise ValueError('Load a trial before adding events.')
+        self.trial.add_event(event)
+
     @staticmethod
-    def _trim_events(raw, start, end):
-        """Retain timestamped C3D events within the half-open recording interval."""
-        events = raw['parameters'].get('EVENT')
-        if not events or 'TIMES' not in events:
-            return
-        times = np.asarray(events['TIMES']['value'])
-        if times.ndim != 2 or times.shape[0] != 2:
-            raise ValueError('EVENT:TIMES must have shape (2, events).')
-        seconds = times[0] * 60. + times[1]
-        keep = (seconds >= start - 1e-9) & (seconds < end - 1e-9)
-        for name, parameter in events.items():
-            if name in ('__METADATA__', 'USED'):
-                continue
-            value = parameter['value']
-            array = np.asarray(value)
-            if array.ndim and array.shape[-1] == len(seconds):
-                selected = array[..., keep]
-                parameter['value'] = selected.tolist() if isinstance(value, list) else selected
-        events['USED']['value'] = np.array([int(keep.sum())])
+    def _write_events(raw, events, start, first_frame, num_frames, rate):
+        """Write the current event list, retaining only in-range point frames."""
+        for event in events:
+            event.validate()
+            expected = frame_at_time(event.time, rate, first_frame, start)
+            if event.frame != expected:
+                raise ValueError(f'Event frame must match time on the marker clock: {event.name!r} '
+                                 f'has frame {event.frame}, expected source frame {expected} '
+                                 f'(first_frame={first_frame}, first_time={start}, rate={rate}).')
+        if 'EVENT' in raw['parameters']:
+            del raw['parameters']['EVENT']
+        # Clear legacy header events so removed/edited events cannot reappear.
+        header = raw['header'].get('events')
+        if header is not None:
+            header['events_time'] = (0.,) * 18
+            header['events_label'] = ('',) * 18
+        selected = [event for event in events if first_frame <= event.frame < first_frame + num_frames]
+        if not selected:
+            raw.add_parameter('EVENT', 'USED', [0])
+        for event in selected:
+            minutes = int(event.time // 60)
+            raw.add_event([minutes, event.time - minutes * 60], label=event.name,
+                          description=event.description)
 
     def _check_derived_forces(self, trial):
         """C3D platforms are reconstructed from analogs, never from cached vectors."""
@@ -253,9 +307,10 @@ class C3DHandler:
         if rate is None or time is None:
             raise ValueError('C3D markers require a sampling rate and clock.')
         first = next(iter(trial.markers.values()))
-        frame = int(round(time[0] * rate))
-        if frame < 0 or not np.isclose(frame, time[0] * rate, atol=1e-6):
-            raise ValueError('C3D time origin must lie on a nonnegative marker frame.')
+        frame = first.first_frame
+        if frame < 0 or not np.isclose(time[0], frame / rate, rtol=0, atol=1e-9):
+            raise ValueError('C3D marker time[0] must equal first_frame / sampling_rate. '
+                             'Save independently shifted clocks to HDF5; C3D export cannot preserve that offset.')
         if trial.forces and first.unit != self.c3d_data['parameters']['POINT']['UNITS']['value'][0].strip():
             raise ValueError('Changing C3D point units also changes force-platform calibration; use HDF5/MOT.')
         raw = deepcopy(self.c3d_data)
@@ -314,7 +369,7 @@ class C3DHandler:
         for key in list(analogs):
             if key.startswith('LABELS') and key != 'LABELS':
                 del analogs[key]
-        self._trim_events(raw, time[0], time[-1] + 1. / rate)
+        self._write_events(raw, trial.events, time[0], frame, n, rate)
         # The old derived platform cache is deliberately not used by ezc3d.write.
         if 'platform' in raw['data']:
             del raw['data']['platform']
@@ -340,8 +395,10 @@ class C3DHandler:
 
         Force plates are derived from calibrated analogs by C3D readers. Direct
         edits to cached force vectors/geometry are rejected; export those to
-        HDF5/MOT. Frame offsets, residuals, camera masks and in-range events are
-        preserved. Unsupported data is rejected before touching the destination.
+        HDF5/MOT. Frame offsets, residuals and camera masks are preserved.
+        Events are written from the current trial list, including edits and
+        removals, retaining only events whose source frames are in range.
+        Unsupported data is rejected before touching the destination.
         Use write_raw_c3d explicitly to serialize the untouched raw structure.
         """
         if self.c3d_data is None:
@@ -375,10 +432,12 @@ class C3DHandler:
                 left = int(np.searchsorted(channel.time, start - 1e-9))
                 right = int(np.searchsorted(channel.time, end - 1e-9))
                 channel.crop(left, right)
+        trial.crop_events(first.first_frame + start_frame, first.first_frame + end_frame + 1)
         raw = self._processed_c3d(trial)  # validate everything before changing shared state
         for name in ('markers', 'analogs', 'forces', 'emgs'):
             mapping = getattr(self.trial, name)
             mapping.clear()
             mapping.update(getattr(trial, name))
+        self.trial.events[:] = trial.events
         self.trial.__post_init__()
         return raw

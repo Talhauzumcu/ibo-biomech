@@ -2,6 +2,19 @@
 import numpy as np
 
 
+def frame_at_time(time, rate, first_frame, first_time):
+    """Map a timestamp to the nearest source frame using an explicit origin.
+
+    A frame number is not an index into the retained samples. Subtract
+    ``first_frame`` from the result to obtain that array index.
+    """
+    if rate is None or not np.isfinite(rate) or rate <= 0:
+        raise ValueError('Frame conversion requires a positive sampling rate.')
+    if not np.isfinite(time) or not np.isfinite(first_time):
+        raise ValueError('Frame conversion requires finite timestamps.')
+    return int(first_frame) + int(round((time - first_time) * rate))
+
+
 def validate_clock(time, size, rate=None, *, uniform=True):
     """Validate a clock without modifying it; return its known/inferred rate."""
     if rate is not None and (not np.isfinite(rate) or rate <= 0):

@@ -1,6 +1,8 @@
 """Typed data containers for markers, forces, analog/EMG signals, trials and subjects."""
 from .analogData import AnalogData
 from .forceData import ForceData
+from .rigidBody import RigidBody, rigidBody
+from .events import Event
 from .markerData import MarkerData
 from .trialData import TrialData
 from .subject import Subject

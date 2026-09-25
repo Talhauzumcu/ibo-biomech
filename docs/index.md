@@ -6,7 +6,7 @@ OpenSim inputs, and organize results for analysis. Install with
 from this checkout. Plotting additionally needs `matplotlib`.
 
 `C3DHandler` and `H5Handler` return `TrialData`. A trial groups `MarkerData`,
-`ForceData`, `AnalogData`, and `EMGData`; it can also hold `IKResults` and
+`ForceData`, `AnalogData`, `EMGData`, `RigidBody`, and `Event`; it can also hold `IKResults` and
 `IDResults`. `Subject` groups multiple trials. Most processing methods mutate
 the selected container, so copy a trial before processing if you need its raw data.
 
@@ -42,6 +42,7 @@ api/markerdata
 api/forcedata
 api/analogdata
 api/emgdata
+api/events
 api/trialdata
 api/subject
 api/data
