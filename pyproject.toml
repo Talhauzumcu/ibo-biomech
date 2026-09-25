@@ -35,3 +35,8 @@ Repository = "https://github.com/Talhauzumcu/ibo-biomech"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ibo_biomech"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
