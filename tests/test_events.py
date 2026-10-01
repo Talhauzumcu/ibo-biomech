@@ -155,7 +155,7 @@ def test_c3d_rejects_silently_renumbering_frames_after_clock_shift(event_c3d, tm
 
 
 @pytest.mark.parametrize('explicit_clock', [False, True])
-def test_legacy_h5_events_and_markers_use_the_recorded_origin(converted_h5, explicit_clock):
+def test_h5_events_and_markers_use_the_recorded_origin(converted_h5, explicit_clock):
     start = 25. if explicit_clock else 5.
     with h5py.File(converted_h5, 'r+') as file:
         file['Trajectories'].attrs['StartFrame'] = 500
@@ -163,9 +163,14 @@ def test_legacy_h5_events_and_markers_use_the_recorded_origin(converted_h5, expl
         del group['Time']
         if explicit_clock:
             group.create_dataset('Time', data=start + np.arange(20) / 100)
-        events = file['Events']
+        for path in ['Analog/Time', 'ForcePlates/0/Time']:
+            file[path][:] += start
+        del file['Events']
+        events = file.create_group('Events')
         events.create_dataset('Time', data=[start + .08])
-        events.attrs['LABELS'] = ['contact']
+        events.create_dataset('Frame', data=[508])
+        events.create_dataset('Name', data=['contact'])
+        events.create_dataset('Description', data=[''])
     handler = H5Handler(str(converted_h5))
     trial = handler.load_data()
     marker = trial.markers['Marker']
@@ -204,7 +209,7 @@ def test_h5_conversion_edits_selective_load_and_subject_cache(event_c3d, tmp_pat
     assert skipped.events == []
     skipped.crop('markers', 5, 15)
     handler.save_data(skipped, str(path))
-    assert_events_equal(handler.load_data().events, trial.events)
+    assert_events_equal(handler.load_data().events, [e for e in trial.events if 6105 <= e.frame < 6115])
     with h5py.File(path) as file:
         assert 'SourceData/Events' not in file
     actual = handler.load_data()
@@ -213,13 +218,13 @@ def test_h5_conversion_edits_selective_load_and_subject_cache(event_c3d, tmp_pat
     assert handler.load_data().events == []
 
 
-def test_h5_event_crop_is_explicit_and_keeps_absolute_clock(event_c3d, tmp_path):
+def test_h5_event_crop_removes_out_of_range_events_and_keeps_absolute_clock(event_c3d, tmp_path):
     path = tmp_path / 'crop.h5'
     FileConverter.c3d_to_h5(str(event_c3d), str(path))
     handler = H5Handler(str(path))
     trial = handler.load_data()
     trial.crop('markers', 5, 15)
-    expected = list(trial.events)
+    expected = [e for e in trial.events if 6105 <= e.frame < 6115]
     handler.save_data(trial, str(path))
     assert_events_equal(handler.load_data().events, expected)
     trial.crop_events(6105, 6115)
@@ -227,22 +232,14 @@ def test_h5_event_crop_is_explicit_and_keeps_absolute_clock(event_c3d, tmp_path)
     assert [event.frame for event in handler.load_data().events] == [6108]
 
 
-def test_legacy_h5_event_loading(converted_h5):
+def test_incomplete_event_layout_is_rejected(converted_h5):
     with h5py.File(converted_h5, 'r+') as file:
-        group = file['Events']
-        group.create_dataset('Time', data=[.01, .05])
-        group.attrs['LABELS'] = ['strike', 'strike']
-        group.attrs['CONTEXTS'] = ['Left', 'Right']
-        group.attrs['DESCRIPTIONS'] = ['first contact', 'second contact']
-    handler = H5Handler(str(converted_h5))
-    trial = handler.load_data()
-    assert [event.frame for event in trial.events] == [1, 5]
-    assert [event.description for event in trial.events] == ['first contact', 'second contact']
-    handler.save_data(trial, str(converted_h5))
-    assert_events_equal(handler.load_data().events, trial.events)
+        del file['Events/Name']
+    with pytest.raises(ValueError, match='requires Name'):
+        H5Handler(str(converted_h5)).load_data()
 
 
-@pytest.mark.parametrize('corruption', ['count', 'frame', 'time', 'version', 'missing'])
+@pytest.mark.parametrize('corruption', ['count', 'frame', 'time', 'missing'])
 def test_malformed_h5_events_rejected(event_c3d, tmp_path, corruption):
     path = tmp_path / 'bad.h5'
     FileConverter.c3d_to_h5(str(event_c3d), str(path))
@@ -256,8 +253,6 @@ def test_malformed_h5_events_rejected(event_c3d, tmp_path, corruption):
             group.create_dataset('Frame', data=[1.5, 2., 3.])
         elif corruption == 'time':
             group['Time'][0] = np.nan
-        elif corruption == 'version':
-            group.attrs['SchemaVersion'] = 99
         else:
             del group['Name']
     with pytest.raises(ValueError):

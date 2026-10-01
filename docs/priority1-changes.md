@@ -12,7 +12,7 @@ must be regenerated from C3D; there are no migration paths.
 | `ibo_biomech/containers/_validation.py` | Shared clock, sampling-rate and channel alignment validation. |
 | `ibo_biomech/containers/markerData.py` | Residuals, camera visibility, per-frame types and frame offsets; cropped metadata; virtual-marker clock/frame preservation. |
 | `ibo_biomech/handlers/_force_schema.py` | One current force schema for conversion, loading and saving; strict vector and metadata validation. |
-| `ibo_biomech/handlers/h5Handler.py` | Unit/channel/frame persistence; atomic saves; removals; selective loading; source annotation archival. |
+| `ibo_biomech/handlers/h5Handler.py` | Unit/channel/frame persistence; atomic saves; removals; selective loading; filtering saved events. |
 | `ibo_biomech/handlers/c3dHandler.py` | Shared processed trial; processed versus raw writers; deterministic reloads; frame/validity/event preservation; explicit rejection of unsupported force edits. |
 | `ibo_biomech/biomech_io/file_converter.py` | Reuses the HDF5 serializers; preserves source metadata; supports marker-only conversion. |
 | `ibo_biomech/utils/utils.py` | Vector MOT documentation, clock validation and orthogonal plate axes from measured corners. |
@@ -80,12 +80,11 @@ C3D platforms are reconstructed from calibrated analog channels. Direct edits
 to derived force vectors/geometry, point-unit changes with existing force
 platforms and independent force resampling must be saved as HDF5/MOT. They are
 rejected before overwriting a C3D destination. Separate EMG/IK/ID results also
-require HDF5. Source-aligned cropping, residuals, camera masks, frame offsets,
+require HDF5. Source-aligned cropping, residuals, frame offsets,
 in-range events and analog reordering are supported.
 
-For processed HDF5 crops, opaque events, rigid bodies and unlabeled trajectories
-are retained under `SourceData`, labeled as belonging to the original recording.
-They are not silently treated as aligned annotations for the new clock.
+HDF5 saves rigid bodies as supplied and filters events to the saved marker
+frame range. There is no archival group or version metadata.
 
 ## Verification
 

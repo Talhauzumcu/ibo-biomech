@@ -114,7 +114,6 @@ class C3DHandler:
                     time=(first_frame + np.arange(points.shape[-1])) / point_rate,
                     first_frame=first_frame,
                     residuals=meta['residuals'][0, i].copy() if 'residuals' in meta else None,
-                    camera_masks=meta['camera_masks'][:, i].copy() if 'camera_masks' in meta else None,
                     virtual=int(virtual[i]) if i < len(virtual) else 0
                 )
                 
@@ -326,10 +325,7 @@ class C3DHandler:
         # C3D has no unknown-residual state: unknown/unobserved points are invalid (-1).
         raw['data']['meta_points'] = {
             'residuals': np.stack([np.nan_to_num(marker.residuals, nan=-1.) if marker.residuals is not None
-                                   else np.full(n, -1.) for marker in trial.markers.values()])[None, ...],
-            'camera_masks': np.stack([marker.camera_masks if marker.camera_masks is not None
-                                      else np.zeros((7, n), dtype=bool)
-                                      for marker in trial.markers.values()], axis=1).astype(bool)}
+                                   else np.full(n, -1.) for marker in trial.markers.values()])[None, ...]}
         raw.add_parameter('POINT', 'VIRTUAL', [int(m.virtual) for m in trial.markers.values()])
         analogs = raw['parameters']['ANALOG']
         if trial.analogs:
@@ -395,7 +391,7 @@ class C3DHandler:
 
         Force plates are derived from calibrated analogs by C3D readers. Direct
         edits to cached force vectors/geometry are rejected; export those to
-        HDF5/MOT. Frame offsets, residuals and camera masks are preserved.
+        HDF5/MOT. Frame offsets and residuals are preserved.
         Events are written from the current trial list, including edits and
         removals, retaining only events whose source frames are in range.
         Unsupported data is rejected before touching the destination.

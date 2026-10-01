@@ -110,11 +110,10 @@ def test_measured_skewed_corners_produce_proper_rotation():
     np.testing.assert_allclose(position, corners.mean(axis=1))
 
 
-def test_only_current_h5_schema_is_accepted(converted_h5):
-    with h5py.File(converted_h5, 'r+') as file:
-        del file['ForcePlates/0'].attrs['SchemaVersion']
-    with pytest.raises(ValueError, match='only force schema'):
-        H5Handler(str(converted_h5)).load_data()
+def test_force_format_has_no_version_attribute(converted_h5):
+    with h5py.File(converted_h5) as file:
+        assert 'SchemaVersion' not in file['ForcePlates/0'].attrs
+    assert H5Handler(str(converted_h5)).load_data().forces
 
 
 @pytest.mark.parametrize('attribute,value', [('NumSamples', 199), ('FreeMomentFrame', 'local')])
@@ -131,7 +130,6 @@ def test_marker_measurement_metadata_survives_crop_twice(converted_h5, tmp_path)
     marker = trial.markers['Marker']
     marker.residuals = np.arange(20, dtype=float)
     marker.residuals[8] = -1.
-    marker.camera_masks[0] = np.arange(20) % 2 == 0
     marker.sample_types = np.arange(20)
     marker.crop(5, 15)
     for index in range(2):
@@ -143,7 +141,9 @@ def test_marker_measurement_metadata_survives_crop_twice(converted_h5, tmp_path)
         assert actual.first_frame == 5
         np.testing.assert_array_equal(actual.residuals, marker.residuals)
         np.testing.assert_array_equal(actual.sample_types, marker.sample_types)
-        np.testing.assert_array_equal(actual.camera_masks, marker.camera_masks)
+        with h5py.File(path) as saved:
+            assert 'CameraMasks' not in saved['Trajectories/Labeled']
+            assert 'CameraMasksKnown' not in saved['Trajectories/Labeled']
 
 
 def test_virtual_midpoint_after_crop_keeps_frame_and_clock(converted_h5, tmp_path):
@@ -160,24 +160,27 @@ def test_virtual_midpoint_after_crop_keeps_frame_and_clock(converted_h5, tmp_pat
     assert actual.first_frame == 5 and actual.virtual == 1
     np.testing.assert_array_equal(actual.time, marker.time)
     assert np.isnan(actual.residuals).all()
-    assert actual.camera_masks is None
     np.testing.assert_array_equal(actual.sample_types, np.full(10, 2))
 
 
-def test_cropped_annotations_are_archived_with_source_scope(converted_h5):
-    with h5py.File(converted_h5, 'r+') as file:
-        file['Events'].create_dataset('Time', data=[0.01, 0.19])
-        file['RigidBodies'].create_dataset('Pose', data=np.ones((4, 4, 20)))
-        file['Trajectories'].create_group('Unlabeled').create_dataset('Data', data=np.ones((1, 4, 20)))
+def test_explicitly_cropped_bodies_and_in_range_events_are_saved(converted_h5):
+    from ibo_biomech import RigidBody, Event
     handler = H5Handler(str(converted_h5))
     trial = handler.load_data()
-    trial.crop('markers', 5, 15)
+    trial.add_rigid_body(RigidBody('body', position=np.ones((3, 20)), rotation=np.eye(3)))
+    trial.events = [Event('before', 1, .01), Event('inside', 8, .08), Event('after', 19, .19)]
     handler.save_data(trial, str(converted_h5))
+    trial = handler.load_data()
+    trial.crop('markers', 5, 15)
+    assert trial.rigid_bodies['body'].num_samples == 20
+    trial.rigid_bodies['body'].crop(5, 15)
+    handler.save_data(trial, str(converted_h5))
+    actual = handler.load_data()
+    assert actual.rigid_bodies['body'].num_samples == 10
+    assert actual.rigid_bodies['body'].time is None
+    assert [e.name for e in actual.events] == ['inside']
     with h5py.File(converted_h5) as file:
-        assert 'Events' not in file and 'RigidBodies' not in file
-        assert 'Unlabeled' not in file['Trajectories']
-        np.testing.assert_array_equal(file['SourceData/Events/Time'][:], [0.01, 0.19])
-        assert 'not aligned' in file['SourceData'].attrs['Scope']
+        assert 'SourceData' not in file
 
 
 def test_rejected_save_preserves_existing_destination(converted_h5, tmp_path, monkeypatch):
@@ -208,12 +211,19 @@ def test_mismatched_marker_clocks_rejected_before_file_creation(converted_h5, tm
 
 
 def test_removed_channels_are_removed_and_skipped_collections_preserved(converted_h5):
+    with h5py.File(converted_h5, 'r+') as file:
+        labeled = file['Trajectories/Labeled']
+        labeled.create_dataset('CameraMasks', data=np.ones((1, 7, 20), dtype=bool))
+        labeled.create_dataset('CameraMasksKnown', data=np.array([True]))
     handler = H5Handler(str(converted_h5))
     trial = handler.load_data(load_markers=False)
     assert trial.markers == {}
     del trial.analogs['Fx']
     trial.forces.clear()
     handler.save_data(trial, str(converted_h5))
+    with h5py.File(converted_h5) as file:
+        assert 'CameraMasks' not in file['Trajectories/Labeled']
+        assert 'CameraMasksKnown' not in file['Trajectories/Labeled']
     actual = handler.load_data()
     assert 'Marker' in actual.markers
     assert 'Fx' not in actual.analogs and not actual.forces
@@ -287,7 +297,7 @@ def test_c3d_crop_preserves_offsets_events_and_validity(synthetic_c3d, tmp_path)
     assert actual.markers['Marker'].first_frame == 505
     assert actual.markers['Marker'].time[0] == pytest.approx(5.05)
     assert actual.markers['Marker'].residuals[3] < 0
-    assert actual.markers['Marker'].camera_masks[0, 2]
+    assert not result.c3d_data['data']['meta_points']['camera_masks'].any()
     assert result.c3d_data['parameters']['EVENT']['LABELS']['value'] == ['inside']
     assert actual.forces['forceplate_0'].num_samples == 100
 

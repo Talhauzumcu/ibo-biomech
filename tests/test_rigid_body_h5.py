@@ -36,7 +36,7 @@ def test_round_trip_preserves_all_fields_and_derived_rpy(saved_bodies):
             np.testing.assert_equal(getattr(result, field), getattr(body, field))
         assert not result.RPY.flags.writeable
     with h5py.File(handler.h5_path) as file:
-        assert file['RigidBodies'].attrs['SchemaVersion'] == 1
+        assert 'SchemaVersion' not in file['RigidBodies'].attrs
         assert 'RPY' not in file['RigidBodies/0']
 
 
@@ -74,20 +74,21 @@ def test_skipped_bodies_preserved_when_other_clocks_change(saved_bodies):
         assert 'SourceData/RigidBodies' not in file
 
 
-def test_rigid_body_clock_change_archives_events_only(saved_bodies):
-    handler, _ = saved_bodies
-    with h5py.File(handler.h5_path, 'r+') as file:
-        file.create_group('Events').create_dataset('Time', data=[2.01])
+def test_rigid_body_crop_does_not_trim_events(saved_bodies):
+    from ibo_biomech import Event
+    handler, trial = saved_bodies
+    trial.events = [Event('before', 200, 2.), Event('inside', 201, 2.01), Event('after', 204, 2.04)]
+    handler.save_data(trial, handler.h5_path)
     trial = handler.load_data()
     trial.rigid_bodies['pelvis/左'].crop(1, 4)
     handler.save_data(trial, handler.h5_path)
+    assert [e.name for e in handler.load_data().events] == ['before', 'inside', 'after']
     with h5py.File(handler.h5_path) as file:
-        assert 'SourceData/Events/Time' in file
-        assert 'SourceData/RigidBodies' not in file
+        assert 'SourceData' not in file
         assert file['RigidBodies/0/Position'].shape == (3, 3)
 
 
-@pytest.mark.parametrize('corruption', ['count', 'shape', 'duplicate', 'markers', 'missing', 'version'])
+@pytest.mark.parametrize('corruption', ['count', 'shape', 'duplicate', 'markers', 'missing'])
 def test_malformed_rigid_bodies_rejected(saved_bodies, corruption):
     handler, _ = saved_bodies
     with h5py.File(handler.h5_path, 'r+') as file:
@@ -104,8 +105,6 @@ def test_malformed_rigid_bodies_rejected(saved_bodies, corruption):
             group.create_dataset('Markers', data=[1, 2])
         elif corruption == 'missing':
             del group['Position']
-        else:
-            file['RigidBodies'].attrs['SchemaVersion'] = 99
     with pytest.raises(ValueError):
         handler.load_data()
 
@@ -126,19 +125,10 @@ def test_invalid_save_leaves_destination_unchanged(saved_bodies, invalid):
     assert Path(handler.h5_path).read_bytes() == before
 
 
-def test_legacy_payload_preserved_when_adding_typed_bodies(tmp_path):
-    path = tmp_path / 'legacy.h5'
+def test_invalid_body_layout_is_rejected(tmp_path):
+    path = tmp_path / 'invalid.h5'
     with h5py.File(path, 'w') as file:
         file.create_group('MetaData')
         file.create_group('RigidBodies').create_dataset('Pose', data=np.eye(4))
-    handler = H5Handler(str(path))
-    trial = handler.load_data()
-    assert trial.rigid_bodies == {}
-    handler.save_data(trial, str(path))
-    with h5py.File(path) as file:
-        np.testing.assert_equal(file['RigidBodies/Pose'][:], np.eye(4))
-    trial.add_rigid_body(RigidBody('new'))
-    handler.save_data(trial, str(path))
-    with h5py.File(path) as file:
-        np.testing.assert_equal(file['SourceData/RigidBodies/Pose'][:], np.eye(4))
-    assert list(handler.load_data().rigid_bodies) == ['new']
+    with pytest.raises(ValueError, match='must be body groups'):
+        H5Handler(str(path)).load_data()

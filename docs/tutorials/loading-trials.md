@@ -52,11 +52,10 @@ print(trial.name, trial.metadata)
 print(trial.marker_labels, trial.marker_rate)
 ```
 
-Only the current force schema (2) is accepted, with vector `Tz` of shape
-`(3, n_samples)`. Regenerate older files using `FileConverter.c3d_to_h5()`;
-there are no legacy layout or scalar-moment compatibility paths. Selective
-loading uses empty collections and tracks them so later saves preserve the
-intentionally skipped data.
+The fixed HDF5 layout follows `test_h5_with_all.h5`, with vector `Tz` of shape
+`(3, n_samples)`. Files have no format-version attributes or compatibility
+branches. Selectively skipped signals, including rigid bodies, are preserved
+when saving. Events are filtered to the saved marker source-frame range.
 
 ## Add metadata without processing arrays
 
@@ -123,21 +122,20 @@ loaded = H5Handler("output/with_bodies.h5").load_data()
 pelvis = loaded.rigid_bodies["pelvis"]
 ```
 
-`RigidBodies` schema version 1 stores a numbered group per body. Each group has
-`Position`, `Rotation`, UTF-8 `Markers`, and optional `Time` datasets, plus
-`Name`, `NumSamples`, `Unit`, and optional `SamplingFrequency` attributes.
-Bodies can have independent sample counts and clocks. `RPY` is recalculated
-from `Rotation` on access. Removing a loaded body removes it from the saved file.
-Use `load_data(load_rigid_bodies=False)` to skip this collection and preserve it
-unchanged during a subsequent save.
+`RigidBodies` stores a numbered group per body, containing `Position`,
+`Rotation`, UTF-8 `Markers`, and optional `Time`, with `Name`, `NumSamples`,
+`Unit`, and optional `SamplingFrequency` attributes. Each body is loaded and
+saved with its own data and optional clock. `RPY` is calculated on access.
 
-Unversioned legacy rigid-body payloads remain opaque and are preserved. Adding
-typed bodies to such a file moves the legacy payload to `SourceData/RigidBodies`.
-When clocks change, opaque legacy events, legacy rigid bodies and unlabeled trajectories move
-under `SourceData`, explicitly scoped to the original recording. They are not
-silently presented as aligned annotations for the cropped trial. IK/ID column
-units and result-removal semantics still have the limitations listed in
-[remaining issues](../remaining-issues.md).
+Cropping affects only the selected collection. Use `body.crop(start, end)` or
+`trial.crop('rigid_bodies', start, end)` to crop rigid bodies explicitly.
+Cropping markers does not change bodies or events in memory. Saving writes the
+supplied body samples without cropping or borrowing the marker clock.
+`load_data(load_rigid_bodies=False)` preserves that collection when saving.
+
+The handler neither creates archival groups nor reads or writes format versions.
+`_atomic_update` only copies the template, applies the requested writes, and
+atomically replaces the destination. It performs no migration or cleanup.
 
 ## Read, edit and save events
 
@@ -171,18 +169,17 @@ C3D EVENT times are decoded as `minutes * 60 + seconds`. Legacy header-only
 event times are offset from the first stored frame onto the trial clock.
 
 `FileConverter.c3d_to_h5`, `H5Handler.save_data`, and `H5Handler.load_data`
-preserve events, duplicates, annotations, and insertion order. HDF5 event schema
-1 uses only `Name`, `Description`, `Frame`, and `Time` datasets under `Events`.
-Extra event fields in older files are ignored and omitted on saving loaded events.
-Older converter files with
-`Time` and `LABELS` are also readable when the trajectory sampling rate is known.
-`load_data(load_events=False)` skips events and preserves them on later saves.
+preserve event names, descriptions, duplicates, and insertion order. The
+`Events` group contains only `Name`, `Description`, `Frame`, and `Time` datasets.
+Only this layout is read; there are no alternate event formats.
 
-Use `trial.crop_events(start_frame, end_frame)` to keep events in a half-open
-source-frame range. Neither frames nor times are rebased. Cropping individual
-signal collections does not implicitly crop events; HDF5 saves the explicit
-event list. `C3DHandler.slice_c3d` crops the shared list along with the signals,
-and processed C3D export includes only events in the exported frame range.
+Use `trial.crop_events(start_frame, end_frame)` to select a half-open
+source-frame range explicitly. Frames and times are never rebased.
+`TrialData.crop` only changes its selected collection. HDF5 saving filters
+events to the saved marker source-frame range, including events skipped during
+loading. If no marker range is available, events are saved as supplied.
+`C3DHandler.slice_c3d` crops events along with markers, analogs, forces and EMGs;
+processed C3D export includes only events in the exported frame range.
 Edits, additions and removals are written by `write_c3d`; `write_raw_c3d` retains
 the original recording. Subject caches include events automatically.
 HDF5 preserves explicit timestamp offsets. C3D export requires the marker

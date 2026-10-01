@@ -26,14 +26,14 @@ priority 2 subject-filter bug; use `--runxfail` to expose it as a failure.
   round trips, geometry, clocks, vector moments, unit/sample metadata, filtering,
   repeated loading and processed C3D writes.
 - `test_priority1_safety.py` checks validation before mutation, unknown geometry,
-  schema rejection, cropped validity/frame metadata, annotation archival,
+  layout validation, cropped validity/frame metadata, event removal,
   atomic saves, channel removals, skipped collections, processed/raw C3D
   ownership, force-edit rejection, analog remapping and duplicate labels.
 - Marker arithmetic tests also verify clock/frame preservation needed by cropped
   virtual-marker workflows.
 
-HDF5 supports only the current schema. Tests require clear rejection of older
-or malformed schemas, scalar free moments and incompatible layouts. The force
+HDF5 uses one fixed layout without version metadata. Tests reject malformed
+arrays, scalar free moments and incompatible layouts. The force
 fixture uses vector `Tz` of shape `(3, n)`, nonzero geometry and proper rotations.
 
 C3D export supports processed markers/source analogs and aligned cropping.

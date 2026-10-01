@@ -96,8 +96,7 @@ class TrialData:
     def crop_events(self, start_frame: int, end_frame: int) -> None:
         """Keep events in [start_frame, end_frame), using source frame numbers.
 
-        Frame numbers and timestamps are not rebased. Cropping other data types
-        via ``crop`` does not implicitly crop events.
+        Frame numbers and timestamps are not rebased.
         """
         if (any(isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer))
                 for value in (start_frame, end_frame)) or start_frame < 0 or end_frame <= start_frame):
@@ -211,7 +210,7 @@ class TrialData:
     #     self.lowpass_filter_forces(cutoff_force, order)
 
     def crop(self, data_type: str, start_idx: int, end_idx: int) -> None:
-        """Crop a specific data type to the same index range.
+        """Crop only the selected data type to the given index range.
 
         Args:
             data_type: Type of data to crop ('markers', 'analogs', 'forces', 'rigid_bodies', 'emgs', 'ik_results', 'id_results', 'events').

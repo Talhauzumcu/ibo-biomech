@@ -11,7 +11,7 @@ import numpy as np
 
 from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject, IKResults, IDResults, Data
 from ibo_biomech.containers import RigidBody, Event
-from ibo_biomech.containers._validation import collection_clock, frame_at_time, validate_clock
+from ibo_biomech.containers._validation import collection_clock
 from ._force_schema import read_plate, write_plate
 
 
@@ -20,9 +20,8 @@ class H5Handler:
 
     Reading returns a fully populated :class:`~ibo_biomech.containers.TrialData`.
     Writing validates the trial and atomically replaces loaded collections.
-    On clock changes, opaque annotations move to ``SourceData`` so they remain
-    explicitly scoped to the original recording. Only the current force schema
-    is accepted; older HDF5 files must be regenerated from source recordings.
+    The dataset layout is fixed. Each signal collection is saved as supplied;
+    events outside the saved marker frame range are discarded.
 
     Metadata fields (``SubjectID``, ``Condition``, ``BodyMass``, ...) are
     intentionally outside the scope of this handler. To update them after
@@ -193,73 +192,26 @@ class H5Handler:
         return str(out_path)
 
     def save_data(self, trial: TrialData, out_path: str) -> str:
-        """Validate then atomically replace loaded collections from a processed trial.
+        """Atomically save supplied collections and discard out-of-range events.
 
-        Removed channels are removed on disk. Collections deliberately skipped
-        during load are preserved. Typed events retain source frames and times;
-        crop them explicitly with TrialData.crop_events if desired.
-        If clocks change, opaque legacy events/rigid bodies
-        and unlabeled trajectories are moved under SourceData, where they remain
-        explicitly scoped to the source recording rather than the cropped trial.
+        Skipped signal collections are preserved. Events, including skipped
+        events from the template, are filtered to the saved marker frame range.
+        Saving does not crop signal data or modify the supplied trial.
         """
         self._validate_trial(trial)
         skipped = getattr(trial, '_unloaded_collections', set())
         def update(h5f):
-            self._archive_source_annotations(h5f, trial, skipped)
-            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results', 'rigid_bodies', 'events'):
+            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results', 'rigid_bodies'):
                 if name not in skipped:
                     getattr(self, f'_save_{name}')(h5f, trial)
+            if 'Trajectories/Labeled' in h5f:
+                labeled = h5f['Trajectories/Labeled']
+                for name in ('CameraMasks', 'CameraMasksKnown'):
+                    if name in labeled:
+                        del labeled[name]
+            self._save_events(h5f, trial)
             h5f.require_group('MetaData').attrs['LastUpdate'] = str(datetime.now())
         return self._atomic_update(out_path, update)
-
-    @staticmethod
-    def _archive_source_annotations(h5f, trial, skipped):
-        changed = False
-        for name, path in [('markers', 'Trajectories/Labeled'), ('analogs', 'Analog'),
-                           ('emgs', 'EMG')]:
-            if name in skipped or path not in h5f:
-                continue
-            channels = getattr(trial, name)
-            original = h5f[path]
-            if not channels:
-                changed |= 'Data' in original and original['Data'].size > 0
-                continue
-            first = next(iter(channels.values()))
-            count = len(first.x if name == 'markers' else first.data)
-            changed |= 'Data' in original and original['Data'].shape[-1] != count
-            if 'Time' in original:
-                changed |= first.time is None or not np.array_equal(original['Time'][:], first.time)
-        if 'forces' not in skipped and 'ForcePlates' in h5f:
-            for group in h5f['ForcePlates'].values():
-                plate = trial.forces.get(group.attrs.get('Name'))
-                changed |= plate is None or group['Force'].shape[-1] != plate.num_samples
-                if plate is not None and 'Time' in group:
-                    changed |= plate.time is None or not np.array_equal(group['Time'][:], plate.time)
-        if ('rigid_bodies' not in skipped and 'RigidBodies' in h5f
-                and 'SchemaVersion' in h5f['RigidBodies'].attrs):
-            for group in h5f['RigidBodies'].values():
-                body = trial.rigid_bodies.get(group.attrs['Name'])
-                changed |= body is None or group['Position'].shape[-1] != body.num_samples
-                if body is not None and 'Time' in group:
-                    changed |= body.time is None or not np.array_equal(group['Time'][:], body.time)
-        if not changed:
-            return
-        paths = ['Trajectories/Unlabeled']
-        if ('events' not in skipped and 'Events' in h5f
-                and H5Handler._opaque_events(h5f['Events'])):
-            paths.append('Events')
-        if ('rigid_bodies' not in skipped and 'RigidBodies' in h5f
-                and 'SchemaVersion' not in h5f['RigidBodies'].attrs):
-            paths.append('RigidBodies')
-        for path in paths:
-            if path in h5f:
-                target = 'SourceData/' + path
-                if target in h5f:
-                    raise ValueError(f'Cannot archive {path}: {target} already exists.')
-                h5f.require_group(target.rsplit('/', 1)[0])
-                h5f.move(path, target)
-        source = h5f.require_group('SourceData')
-        source.attrs['Scope'] = 'Original recording; not aligned to the processed trial clock'
 
     def modify_metadata(self, updates: Dict[str, Any], out_path: Optional[str] = None) -> H5Handler:
         """Atomically update metadata, including same-path saves."""
@@ -283,15 +235,12 @@ class H5Handler:
                               else np.ones(n, dtype=np.int8) for marker in markers])
             residuals = np.stack([marker.residuals if marker.residuals is not None
                                   else np.full(n, np.nan) for marker in markers])
-            masks = np.stack([marker.camera_masks if marker.camera_masks is not None
-                              else np.zeros((7, n), dtype=bool) for marker in markers])
         else:
             n, time, rate, unit, start = 0, None, None, '', 0
             data, types = np.empty((0, 4, 0)), np.empty((0, 0), dtype=np.int8)
-            residuals, masks = np.empty((0, 0)), np.empty((0, 7, 0), dtype=bool)
+            residuals = np.empty((0, 0))
         for name, value in [('Data', data), ('Type', types), ('Time', time),
-                            ('Residuals', residuals), ('CameraMasks', masks),
-                            ('CameraMasksKnown', np.array([m.camera_masks is not None for m in markers])),
+                            ('Residuals', residuals),
                             ('Virtual', np.array([bool(m.virtual) for m in markers]))]:
             self._replace_dataset(labeled, name, value)
         labeled.attrs.update(Labels=list(trial.markers), Unit=unit, NumLabeled=len(markers),
@@ -428,16 +377,13 @@ class H5Handler:
             raise ValueError('Residuals do not match marker/frame counts.')
         types = group['Type'][:] if 'Type' in group else None
         virtual = group['Virtual'][:] if 'Virtual' in group else np.zeros(len(labels), dtype=bool)
-        masks = group['CameraMasks'][:] if 'CameraMasks' in group else None
-        masks_known = group['CameraMasksKnown'][:] if 'CameraMasksKnown' in group else np.zeros(len(labels), dtype=bool)
         result = {}
         for i, label in enumerate(labels):
             result[label] = MarkerData(name=label, x=data[i, 0], y=data[i, 1], z=data[i, 2],
                 unit=group.attrs.get('Unit', 'mm'), sampling_rate=traj.attrs.get('SamplingFrequency'),
                 time=time, first_frame=int(traj.attrs.get('StartFrame', 0)), virtual=int(virtual[i]),
                 residuals=residuals[i] if residuals is not None else None,
-                sample_types=types[i] if types is not None else None,
-                camera_masks=masks[i] if masks is not None and masks_known[i] else None)
+                sample_types=types[i] if types is not None else None)
         return result
 
     def _load_channels(self, h5f, name, cls):
@@ -533,28 +479,10 @@ class H5Handler:
         return plates
 
     def _save_rigid_bodies(self, h5f: h5py.File, trial: TrialData) -> None:
-        """Replace the typed collection; retain legacy opaque data in SourceData.
-
-        Schema 1 stores numbered body groups with Position, Rotation, Markers
-        (UTF-8 strings) and optional Time datasets. RPY is derived, not stored.
-        Unversioned legacy data is left untouched when no bodies are supplied.
-        """
+        """Write each supplied body without changing its samples or clock."""
         if 'RigidBodies' in h5f:
-            group = h5f['RigidBodies']
-            if 'SchemaVersion' not in group.attrs and len(group):
-                if not trial.rigid_bodies:
-                    return
-                target = 'SourceData/RigidBodies'
-                if target in h5f:
-                    raise ValueError(f'Cannot archive RigidBodies: {target} already exists.')
-                h5f.require_group('SourceData').attrs['Scope'] = 'Original recording; not aligned to the processed trial clock'
-                h5f.move('RigidBodies', target)
-            else:
-                del h5f['RigidBodies']
-        if not trial.rigid_bodies:
-            return
+            del h5f['RigidBodies']
         group = h5f.create_group('RigidBodies', track_order=True)
-        group.attrs['SchemaVersion'] = 1
         for index, body in enumerate(trial.rigid_bodies.values()):
             target = group.create_group(str(index))
             target.attrs.update(Name=body.name, NumSamples=body.num_samples, Unit=body.unit)
@@ -565,14 +493,10 @@ class H5Handler:
             target.create_dataset('Markers', data=body.markers, dtype=h5py.string_dtype('utf-8'))
 
     def _load_rigid_bodies(self, h5f: h5py.File) -> Dict[str, RigidBody]:
-        """Load schema 1 poses; leave unversioned legacy payloads opaque."""
+        """Load body poses and their own optional clocks."""
         if 'RigidBodies' not in h5f:
             return {}
         collection = h5f['RigidBodies']
-        if 'SchemaVersion' not in collection.attrs:
-            return {}
-        if collection.attrs['SchemaVersion'] != 1:
-            raise ValueError('Only rigid body schema 1 is supported.')
         bodies = {}
         for group in collection.values():
             if not isinstance(group, h5py.Group):
@@ -597,81 +521,42 @@ class H5Handler:
                 raise ValueError(f'{group.name}: Markers must be a one-dimensional string dataset.')
             unit = group.attrs['Unit']
             unit = unit.decode() if isinstance(unit, bytes) else unit
+            time = group['Time'][:] if 'Time' in group else None
+            rate = group.attrs.get('SamplingFrequency')
             bodies[name] = RigidBody(name=name, markers=self._decode_labels(markers[:]),
                 position=position, rotation=rotation, unit=unit,
-                sampling_rate=group.attrs.get('SamplingFrequency'),
-                time=group['Time'][:] if 'Time' in group else None)
+                sampling_rate=rate, time=time)
         return bodies
 
-    @staticmethod
-    def _opaque_events(group) -> bool:
-        """Identify legacy annotations without enough data to build Event objects."""
-        return 'SchemaVersion' not in group.attrs and 'LABELS' not in group.attrs
-
     def _save_events(self, h5f: h5py.File, trial: TrialData) -> None:
-        """Replace events, preserving order, duplicates and source-frame clocks.
-
-        Events are not implicitly cropped when another collection changes.
-        Use TrialData.crop_events to explicitly select the desired frame range.
-        """
+        """Save events within the saved marker range, using source frames."""
+        events = (self._load_events(h5f) if 'events' in getattr(trial, '_unloaded_collections', set())
+                  else trial.events)
+        if 'Trajectories' in h5f:
+            trajectories = h5f['Trajectories']
+            count = int(trajectories.attrs.get('NumFrames', 0))
+            if count > 0:
+                start = int(trajectories.attrs['StartFrame'])
+                events = [event for event in events if start <= event.frame < start + count]
         if 'Events' in h5f:
-            group = h5f['Events']
-            if self._opaque_events(group) and len(group):
-                if not trial.events:
-                    return
-                target = 'SourceData/Events'
-                if target in h5f:
-                    raise ValueError(f'Cannot archive Events: {target} already exists.')
-                h5f.require_group('SourceData').attrs['Scope'] = 'Original recording; not aligned to the processed trial clock'
-                h5f.move('Events', target)
-            else:
-                del h5f['Events']
-        if not trial.events:
-            return
+            del h5f['Events']
         group = h5f.create_group('Events')
-        group.attrs.update(SchemaVersion=1, Scope='Trial clock; zero-based source point frames; seconds')
         for key, field in [('Name', 'name'), ('Description', 'description')]:
-            group.create_dataset(key, data=[getattr(event, field) for event in trial.events],
+            group.create_dataset(key, data=[getattr(event, field) for event in events],
                                  dtype=h5py.string_dtype('utf-8'))
         for key, field, dtype in [('Frame', 'frame', np.int64), ('Time', 'time', float)]:
-            self._replace_dataset(group, key, np.array([getattr(event, field) for event in trial.events], dtype=dtype))
+            self._replace_dataset(group, key, np.array([getattr(event, field) for event in events], dtype=dtype))
 
     def _load_events(self, h5f: h5py.File) -> List[Event]:
-        """Load typed events or the converter's legacy Time/LABELS format."""
+        """Load the standard Name, Description, Frame and Time datasets."""
         if 'Events' not in h5f:
             return []
         group = h5f['Events']
-        if self._opaque_events(group):
+        if not len(group):
             return []
-        if 'SchemaVersion' not in group.attrs:
-            labels = self._decode_labels(group.attrs['LABELS'])
-            if not labels:
-                return []
-            if 'Time' not in group or group['Time'].shape != (len(labels),):
-                raise ValueError('Legacy event Time must match LABELS.')
-            rate = h5f['Trajectories'].attrs.get('SamplingFrequency') if 'Trajectories' in h5f else None
-            if rate is None or not np.isfinite(rate) or rate <= 0:
-                raise ValueError('Legacy event frames require a positive trajectory sampling rate.')
-            first_frame = int(h5f['Trajectories'].attrs.get('StartFrame', 0))
-            first_time = first_frame / rate
-            if 'Trajectories/Labeled/Time' in h5f:
-                clock = h5f['Trajectories/Labeled/Time'][:]
-                if clock.size:
-                    validate_clock(clock, len(clock), rate)
-                    first_time = float(clock[0])
-            descriptions = self._decode_labels(group.attrs.get('DESCRIPTIONS', [''] * len(labels)))
-            if len(descriptions) != len(labels):
-                raise ValueError('Legacy event annotations must match LABELS.')
-            times = group['Time'][:]
-            if not np.isfinite(times).all() or (times < 0).any():
-                raise ValueError('Event time must be finite and nonnegative.')
-            return [Event(name, frame_at_time(time, rate, first_frame, first_time), float(time), description=description)
-                    for name, time, description in zip(labels, times, descriptions)]
-        if group.attrs['SchemaVersion'] != 1:
-            raise ValueError('Only event schema 1 is supported.')
-        required = {'Name', 'Frame', 'Time'}
+        required = {'Name', 'Description', 'Frame', 'Time'}
         if not required <= set(group):
-            raise ValueError('Events requires Name, Frame and Time datasets.')
+            raise ValueError('Events requires Name, Description, Frame and Time datasets.')
         if group['Name'].ndim != 1:
             raise ValueError('Event Name must be a one-dimensional string dataset.')
         count = len(group['Name'])

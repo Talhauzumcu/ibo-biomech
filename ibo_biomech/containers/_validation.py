@@ -1,7 +1,6 @@
 """Shared validation for clocks and serialized channel collections."""
 import numpy as np
 
-
 def frame_at_time(time, rate, first_frame, first_time):
     """Map a timestamp to the nearest source frame using an explicit origin.
 
@@ -13,7 +12,6 @@ def frame_at_time(time, rate, first_frame, first_time):
     if not np.isfinite(time) or not np.isfinite(first_time):
         raise ValueError('Frame conversion requires finite timestamps.')
     return int(first_frame) + int(round((time - first_time) * rate))
-
 
 def validate_clock(time, size, rate=None, *, uniform=True):
     """Validate a clock without modifying it; return its known/inferred rate."""
@@ -35,7 +33,6 @@ def validate_clock(time, size, rate=None, *, uniform=True):
         if rate is None and uniform:
             return float(1. / steps[0])
     return rate
-
 
 def collection_clock(channels, *, markers=False):
     """Validate equal sample counts, clocks and rates in a shared dataset."""

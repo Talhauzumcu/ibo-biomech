@@ -7,7 +7,6 @@ means unknown. Older files must be regenerated from their source recordings.
 from ibo_biomech.containers import ForceData
 
 
-VERSION = 2
 FIELDS = {'Force': 'force', 'Moment': 'moment', 'COP': 'cop', 'Tz': 'Tz',
           'Corners': 'corners', 'Origin': 'origin', 'Position': 'position',
           'Rotation': 'rotation', 'Time': 'time'}
@@ -15,9 +14,6 @@ FIELDS = {'Force': 'force', 'Moment': 'moment', 'COP': 'cop', 'Tz': 'Tz',
 
 def read_plate(group):
     """Require the current schema and validate every stored array shape."""
-    if group.attrs.get('SchemaVersion') != VERSION:
-        raise ValueError(f'{group.name}: only force schema {VERSION} is supported; '
-                         'regenerate the HDF5 file from its source recording.')
     required = set(FIELDS) - {'Time'}
     missing = required - set(group)
     if missing:
@@ -59,7 +55,7 @@ def write_plate(group, plate):
         value = getattr(plate, field)
         if value is not None:
             group.create_dataset(key, data=value, compression='gzip')
-    group.attrs.update(SchemaVersion=VERSION, Name=plate.name,
+    group.attrs.update(Name=plate.name,
                        CoordinateSystem=int(plate.coordinateSystem),
                        FreeMomentFrame='global' if plate.coordinateSystem else 'local',
                        NumSamples=plate.num_samples, unit_force=plate.unit_force,

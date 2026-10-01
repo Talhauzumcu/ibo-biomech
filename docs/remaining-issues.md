@@ -20,14 +20,14 @@ free-moment compatibility paths.
 
 ### 1. Current HDF5 force schema
 
-`handlers/_force_schema.py` defines schema **2**, the only accepted force schema.
+`handlers/_force_schema.py` defines the fixed force layout used by `test_h5_with_all.h5`.
 The required arrays are `Force`, `Moment`, `COP`, `Tz`, `Corners`, `Origin`,
 `Position` and `Rotation`; `Time` is optional only when a clock is unavailable.
-`SchemaVersion`, `NumSamples`, `CoordinateSystem` and `FreeMomentFrame` must be
+`NumSamples`, `CoordinateSystem` and `FreeMomentFrame` must be
 consistent. `Corners` is `(3, 4, n)` and `Origin` is `(3, 1)`.
 
 Regenerate older HDF5 files using `FileConverter.c3d_to_h5()`. Files with scalar
-`Tz`, lowercase geometry, incompatible layouts or missing schema information
+`Tz`, lowercase geometry, incompatible layouts or missing required datasets
 are rejected rather than guessed or migrated. Entirely unknown geometry is
 stored as NaN, including orientation; it is never replaced with a zero matrix
 or a claimed identity pose.
@@ -50,18 +50,16 @@ now constructs orthogonal axes even with slightly skewed measured corners.
 
 ### 3. Processed HDF5 metadata
 
-Marker units, residuals, camera masks, virtual status, per-sample type codes,
+Marker units, residuals, virtual status, per-sample type codes,
 source frame offsets and clocks are retained. Crop slices the measurement
-metadata too. Unknown residuals are NaN; absent camera information is tracked
-explicitly. Force groups refresh units, rates, counts and coordinate metadata.
+metadata too. Unknown residuals are NaN. Force groups refresh units, rates, counts and coordinate metadata.
 Analog/EMG groups persist per-channel units and identifiers.
 
 Saving validates shared shapes/clocks/rates, writes to a temporary file, then
 atomically replaces the destination. Same-path saves are supported. Removed
 loaded channels disappear; collections intentionally skipped during loading
-are preserved. If a retained clock changes, opaque events, rigid bodies and
-unlabeled trajectories move under `SourceData` with an explicit original-recording
-scope. They are not presented as aligned annotations for the processed trial.
+are preserved. Rigid bodies are saved as supplied. Events outside the saved
+marker frame range are removed. No archival groups or format versions are written.
 IK/ID column metadata remains priority 2 work (issues 9 and 11).
 
 ### 4. Vector free moments and exports
@@ -89,7 +87,7 @@ analog channel reordering are supported, with plate-channel references updated.
 
 `handler.write_raw_c3d(path)` explicitly writes the original raw structure.
 C3D has no unknown-residual state: missing residual information is written as
-invalid (`-1`), while source residuals/camera masks are preserved. HDF5 retains
+invalid (`-1`), while source residuals are preserved. HDF5 retains
 unknown residuals as NaN. There is no arbitrary inverse-calibration writer for
 independently processed force vectors.
 

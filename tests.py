@@ -158,4 +158,5 @@ trialdata.add_rigid_body(rigid_body_2)
 event_time = trialdata.markers['STRN'].time_at_frame(123)
 event1 = Event(name='test_event1', frame=123, time=event_time, description='test event 1')
 trialdata.add_event(event1)
-h5h.save_data(trialdata, 'test_h5_with_all.h5')
+h5h.save_data(trialdata, 'test_h5_test2.h5')
+# %%

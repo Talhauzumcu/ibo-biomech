@@ -35,14 +35,13 @@ class MarkerData:
     time: Optional[np.ndarray] = None
     virtual: int = 0 #Whether the marker is virtual or measured.
     residuals: Optional[np.ndarray] = None  # Source measurement residual; NaN = unknown.
-    camera_masks: Optional[np.ndarray] = None  # C3D visibility, shape (7, n).
     sample_types: Optional[np.ndarray] = None  # Original per-frame HDF5 Type codes.
     first_frame: int = 0  # Source frame index of the first retained sample.
 
     def __post_init__(self):
         if self.time is None and self.sampling_rate is not None:
             self.time = (self.first_frame + np.arange(len(self.x))) / self.sampling_rate
-        for name in ('residuals', 'camera_masks', 'sample_types'):
+        for name in ('residuals', 'sample_types'):
             value = getattr(self, name)
             if value is not None:
                 setattr(self, name, np.array(value, copy=True))
@@ -51,8 +50,7 @@ class MarkerData:
     def validate_sample_metadata(self):
         """Check optional measurement metadata without inventing validity."""
         for name, shape in [('residuals', (len(self.x),)),
-                            ('sample_types', (len(self.x),)),
-                            ('camera_masks', (7, len(self.x)))]:
+                            ('sample_types', (len(self.x),))]:
             value = getattr(self, name)
             if value is not None:
                 value = np.asarray(value)
@@ -153,7 +151,7 @@ class MarkerData:
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
-        for name in ('residuals', 'camera_masks', 'sample_types'):
+        for name in ('residuals', 'sample_types'):
             value = getattr(self, name)
             if value is not None:
                 setattr(self, name, value[..., start_idx:end_idx].copy())
