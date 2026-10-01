@@ -24,7 +24,7 @@ def assert_events_equal(actual, expected):
     assert len(actual) == len(expected)
     for left, right in zip(actual, expected):
         assert left.time == pytest.approx(right.time, abs=1e-6)
-        for field in ('name', 'frame', 'description'):
+        for field in ('name', 'frame', 'description', 'context', 'subject', 'icon_id', 'generic_flag'):
             assert getattr(left, field) == getattr(right, field)
 
 
@@ -271,26 +271,78 @@ def test_h5_rejected_save_does_not_change_file(event_c3d, tmp_path):
     assert path.read_bytes() == before
 
 
-def test_event_fields_and_h5_drop_old_annotations(event_c3d, tmp_path):
+def test_event_fields_and_h5_preserve_annotations(event_c3d, tmp_path):
     from dataclasses import fields
 
-    assert {field.name for field in fields(Event)} == {'name', 'description', 'frame', 'time'}
-    path = tmp_path / 'minimal_events.h5'
+    assert {field.name for field in fields(Event)} == {
+        'name', 'description', 'frame', 'time', 'context', 'subject', 'icon_id', 'generic_flag'}
+    expected_datasets = {'Name', 'Description', 'Frame', 'Time',
+                         'Context', 'Subject', 'IconID', 'GenericFlag'}
+    path = tmp_path / 'events.h5'
     FileConverter.c3d_to_h5(str(event_c3d), str(path))
     with h5py.File(path, 'r+') as file:
         group = file['Events']
-        assert set(group) == {'Name', 'Description', 'Frame', 'Time'}
-        for key in ('Context', 'Subject'):
-            group.create_dataset(key, data=['old'] * 3, dtype=h5py.string_dtype('utf-8'))
-        for key in ('IconID', 'GenericFlag'):
-            group.create_dataset(key, data=[1, 1, 1])
+        assert set(group) == expected_datasets
     handler = H5Handler(str(path))
     trial = handler.load_data()
     assert trial.events[1].description == 'contact'
+    assert (trial.events[1].context, trial.events[1].subject,
+            trial.events[1].icon_id, trial.events[1].generic_flag) == ('Right', 'P1', 1, 1)
+    trial.events[1].context = '左'
+    trial.events[1].subject = '参加者'
     handler.save_data(trial, str(path))
     with h5py.File(path) as file:
-        assert set(file['Events']) == {'Name', 'Description', 'Frame', 'Time'}
+        assert set(file['Events']) == expected_datasets
     assert_events_equal(handler.load_data().events, trial.events)
+
+
+def test_h5_legacy_events_default_new_fields(event_c3d, tmp_path):
+    path = tmp_path / 'legacy.h5'
+    FileConverter.c3d_to_h5(str(event_c3d), str(path))
+    with h5py.File(path, 'r+') as file:
+        for key in ('Context', 'Subject', 'IconID', 'GenericFlag'):
+            del file['Events'][key]
+    for event in H5Handler(str(path)).load_data().events:
+        assert (event.context, event.subject, event.icon_id, event.generic_flag) == ('', '', 0, 0)
+
+
+@pytest.mark.parametrize('field', ['icon_id', 'generic_flag'])
+@pytest.mark.parametrize('value', [1.5, 1.0, '1', True, np.bool_(False), np.nan])
+def test_event_integer_metadata_rejects_invalid_values(field, value):
+    with pytest.raises(ValueError, match=field):
+        Event('event', 1, .01, **{field: value})
+
+
+@pytest.mark.parametrize('key', ['ICON_IDS', 'GENERIC_FLAGS'])
+@pytest.mark.parametrize('value', [.5, np.nan, np.inf])
+def test_c3d_invalid_integer_metadata_rejected(event_c3d, key, value):
+    handler = C3DHandler(str(event_c3d))
+    handler.load_data()
+    handler.c3d_data['parameters']['EVENT'][key]['value'] = [value, 0., 0.]
+    with pytest.raises(ValueError, match=key):
+        handler._parse_events()
+
+
+@pytest.mark.parametrize('key', ['DESCRIPTIONS', 'CONTEXTS', 'SUBJECTS', 'ICON_IDS', 'GENERIC_FLAGS'])
+@pytest.mark.parametrize('mode', ['missing', 'empty', 'short'])
+def test_c3d_optional_event_metadata(event_c3d, key, mode):
+    handler = C3DHandler(str(event_c3d))
+    handler.load_data()
+    parameters = handler.c3d_data['parameters']['EVENT']
+    if mode == 'missing':
+        del parameters[key]
+    else:
+        parameters[key]['value'] = [] if mode == 'empty' else parameters[key]['value'][:1]
+    if mode == 'short':
+        with pytest.raises(ValueError, match=key):
+            handler._parse_events()
+    else:
+        handler._parse_events()
+        field, default = {'DESCRIPTIONS': ('description', ''), 'CONTEXTS': ('context', ''),
+                          'SUBJECTS': ('subject', ''), 'ICON_IDS': ('icon_id', 0),
+                          'GENERIC_FLAGS': ('generic_flag', 0)}[key]
+        assert len(handler.events) == 3
+        assert all(getattr(event, field) == default for event in handler.events)
 
 
 def test_user_example_events_round_trip(tmp_path):

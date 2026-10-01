@@ -24,21 +24,31 @@ class Event:
     frame: int
     time: float
     description: str = ''
+    context: str = ''
+    subject: str = ''
+    generic_flag: int = 0
+    icon_id: int = 0
 
     def __post_init__(self):
         self.validate()
         self.frame = int(self.frame)
         self.time = float(self.time)
+        self.icon_id = int(self.icon_id)
+        self.generic_flag = int(self.generic_flag)
 
     def validate(self) -> None:
         """Reject malformed annotations before writing a trial."""
-        for field in ('name', 'description'):
+        for field in ('name', 'description', 'context', 'subject'):
             if not isinstance(getattr(self, field), str):
                 raise ValueError(f'Event {field} must be a string.')
         if isinstance(self.frame, (bool, np.bool_)) or not isinstance(self.frame, Integral):
             raise ValueError('Event frame must be an integer.')
         if self.frame < 0:
             raise ValueError('Event frame must be nonnegative.')
+        for field in ('icon_id', 'generic_flag'):
+            value = getattr(self, field)
+            if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+                raise ValueError(f'Event {field} must be an integer.')
         if (isinstance(self.time, (bool, np.bool_)) or not isinstance(self.time, Real)
                 or not np.isfinite(self.time) or self.time < 0):
             raise ValueError('Event time must be finite and nonnegative.')

@@ -14,7 +14,8 @@ def assert_standard_output(path):
         def check(name, obj):
             assert 'SchemaVersion' not in obj.attrs, name
         file.visititems(check)
-        assert set(file['Events']) == {'Name', 'Description', 'Frame', 'Time'}
+        assert set(file['Events']) == {'Name', 'Description', 'Frame', 'Time',
+                                      'Context', 'Subject', 'IconID', 'GenericFlag'}
 
 
 def test_direct_marker_crop_preserves_skipped_bodies_and_filters_events(converted_h5):

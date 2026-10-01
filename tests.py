@@ -160,3 +160,8 @@ event1 = Event(name='test_event1', frame=123, time=event_time, description='test
 trialdata.add_event(event1)
 h5h.save_data(trialdata, 'test_h5_test2.h5')
 # %%
+h5h2 = H5Handler('test_h5_test2.h5')
+trialdata2 = h5h2.load_data()
+h5h2.modify_metadata({'SubjectGroup': 'testgroup'})
+h5h2.save_data(trialdata2, 'test_h5_test2_modified.h5')
+# %%

@@ -34,7 +34,7 @@ class FileConverter:
             h5_path: Destination path for the HDF5 file.
             metadata: Optional metadata fields to include in the HDF5 file.
                 Keys can include ``project``, ``project_pi``, ``subject_id``,
-                ``condition``, ``body_mass``, ``body_height``, ``sex``, and ``age``.
+                ``condition``, ``body_mass``, ``body_height``, ``sex``, ``age``, and ``subject_group``.
                 Any missing fields will be filled with ``"Unknown"``.
 
         Returns:
@@ -53,7 +53,7 @@ class FileConverter:
             for field, argument in [('Project', 'project'), ('ProjectPI', 'project_pi'),
                                     ('SubjectID', 'subject_id'), ('Condition', 'condition'),
                                     ('BodyMass', 'body_mass'), ('BodyHeight', 'body_height'),
-                                    ('Sex', 'sex'), ('Age', 'age')]:
+                                    ('Sex', 'sex'), ('Age', 'age'), ('SubjectGroup', 'subject_group')]:
                 meta.attrs[field] = metadata.get(argument, 'Unknown')
             meta.create_group('Location').attrs.update(Lat='Unknown', Lon='Unknown')
             # The same serializers are used for conversion and processed saves.

@@ -541,14 +541,14 @@ class H5Handler:
         if 'Events' in h5f:
             del h5f['Events']
         group = h5f.create_group('Events')
-        for key, field in [('Name', 'name'), ('Description', 'description')]:
-            group.create_dataset(key, data=[getattr(event, field) for event in events],
-                                 dtype=h5py.string_dtype('utf-8'))
-        for key, field, dtype in [('Frame', 'frame', np.int64), ('Time', 'time', float)]:
-            self._replace_dataset(group, key, np.array([getattr(event, field) for event in events], dtype=dtype))
+        string_type = h5py.string_dtype('utf-8')
+        for key, field, dtype in [('Name', 'name', string_type),('Frame', 'frame', int), ('Time', 'time', float),
+                                  ('Description', 'description', string_type), ('Context', 'context', string_type), ('Subject', 'subject', string_type),
+                                   ('IconID', 'icon_id', int), ('GenericFlag', 'generic_flag', int)]:
+            group.create_dataset(key, data=[getattr(event, field) for event in events], dtype=dtype)
 
     def _load_events(self, h5f: h5py.File) -> List[Event]:
-        """Load the standard Name, Description, Frame and Time datasets."""
+        """Load required event fields and optional annotation datasets."""
         if 'Events' not in h5f:
             return []
         group = h5f['Events']
@@ -562,13 +562,14 @@ class H5Handler:
         count = len(group['Name'])
         values = {}
         for key, field in [('Name', 'name'), ('Frame', 'frame'), ('Time', 'time'),
-                           ('Description', 'description')]:
+                           ('Description', 'description'), ('Context', 'context'), ('Subject', 'subject'),
+                           ('IconID', 'icon_id'), ('GenericFlag', 'generic_flag')]:
             if key not in group:
                 continue
             dataset = group[key]
             if dataset.shape != (count,):
                 raise ValueError(f'Event {key} must match the event count.')
-            if field in ('name', 'description'):
+            if field in ('name', 'description', 'context', 'subject'):
                 if h5py.check_string_dtype(dataset.dtype) is None:
                     raise ValueError(f'Event {key} must contain strings.')
                 values[field] = self._decode_labels(dataset[:])

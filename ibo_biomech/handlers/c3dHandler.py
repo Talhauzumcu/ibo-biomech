@@ -1,5 +1,6 @@
 from ezc3d import c3d
 import os
+from numbers import Real
 import tempfile
 from typing import Dict, List, Optional, Tuple, Union
 from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData, Event
@@ -221,18 +222,34 @@ class C3DHandler:
             labels = parameters.get('LABELS', {}).get('value', [])
             if count < 0 or times.ndim != 2 or times.shape[0] != 2 or times.shape[1] < count or len(labels) < count:
                 raise ValueError('EVENT:USED, TIMES and LABELS must have matching event counts.')
-            descriptions = parameters.get('DESCRIPTIONS', {}).get('value', [])
-            # ezc3d may read an all-blank string parameter as [].
-            if len(descriptions) == 0:
-                descriptions = [''] * count
-            if len(descriptions) < count:
-                raise ValueError('EVENT:DESCRIPTIONS must match the event count.')
+            def optional_values(key, default):
+                values = parameters.get(key, {}).get('value', [])
+                # ezc3d may read an all-blank string parameter as [].
+                if len(values) == 0:
+                    return [default] * count
+                if len(values) < count:
+                    raise ValueError(f'EVENT:{key} must match the event count.')
+                if key in ('ICON_IDS', 'GENERIC_FLAGS'):
+                    # ezc3d may store integer annotations as floating-point parameters.
+                    selected = values[:count]
+                    if any(isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                           or not np.isfinite(value) or value != int(value) for value in selected):
+                        raise ValueError(f'EVENT:{key} must contain integers.')
+                    return [int(value) for value in selected]
+                return values
+
+            descriptions = optional_values('DESCRIPTIONS', '')
+            contexts = optional_values('CONTEXTS', '')
+            subjects = optional_values('SUBJECTS', '')
+            icon_ids = optional_values('ICON_IDS', 0)
+            generic_flags = optional_values('GENERIC_FLAGS', 0)
             for index in range(count):
                 time = float(times[0, index] * 60. + times[1, index])
                 if not np.isfinite(time) or time < 0:
                     raise ValueError('Event times must be finite and nonnegative.')
                 self.events.append(Event(name=labels[index], frame=frame_at_time(time, rate, first_frame, first_time),
-                                          time=time, description=descriptions[index]))
+                                          time=time, description=descriptions[index], context=contexts[index], subject=subjects[index],
+                                          icon_id=icon_ids[index], generic_flag=generic_flags[index]))
         else:
             header = self.c3d_data['header'].get('events', {})
             for label, seconds in zip(header.get('events_label', ()), header.get('events_time', ())):
@@ -270,7 +287,9 @@ class C3DHandler:
         for event in selected:
             minutes = int(event.time // 60)
             raw.add_event([minutes, event.time - minutes * 60], label=event.name,
-                          description=event.description)
+                          description=event.description, context=event.context,
+                          subject=event.subject, icon_id=int(event.icon_id),
+                          generic_flag=int(event.generic_flag))
 
     def _check_derived_forces(self, trial):
         """C3D platforms are reconstructed from analogs, never from cached vectors."""
