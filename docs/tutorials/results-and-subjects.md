@@ -34,14 +34,15 @@ assert np.allclose(loaded["hip_flexion_r"].data, ik["hip_flexion_r"].data)
 print(loaded.columns)
 ```
 
-`Data` derives its sampling rate from a uniform time vector, or creates time
-from `sampling_rate` if time was omitted. Explicitly pass `time=ik.time` to
-`add_column()`; it currently does not inherit the result time automatically.
+For at least two uniformly spaced timestamps, `Data` derives its sampling rate
+from `time`, or creates time from `sampling_rate` if time was omitted. Pass
+`time=ik.time` when adding a column so it has the result clock for filtering.
 
-The reader currently assigns the file's angle unit to every column. Known
-pelvis translations are excluded from angle conversion, but their read-in unit
-labels still need correction. Other translational model coordinates are not
-automatically recognized.
+The reader initializes column units from the file's `inDegrees` flag. Set
+physical units from your model before converting mixed angle/translation
+results; `to_rad()` and `to_deg()` skip columns whose unit is neither `deg` nor
+`rad`. The three named pelvis translations are also excluded. This example's
+translation is in metres:
 
 ```python
 loaded["pelvis_tx"].unit = "m"
@@ -72,9 +73,10 @@ for name, column in id_results.data.items():
 table.to_csv(output / "walking_ID.csv", index=False)
 ```
 
-Do not interpret the current `IDResults.unit` as a physical force/moment unit:
-the shared reader still derives it from `inDegrees`. Units belong to individual
-columns, particularly when a result mixes forces, moments, and normalized values.
+Set physical units on individual ID columns from the output/model definition,
+particularly when a result mixes forces, moments, and normalized values. The
+container-level unit initialized from `inDegrees` does not describe those
+quantities.
 
 ## Normalize a selected interval
 
@@ -109,7 +111,7 @@ for number in range(2):
     )
     trial = TrialData(
         name=f"walk_{number + 1:02d}", markers={marker.name: marker},
-        metadata={"Condition": "walking"},
+        metadata={"Project": {"Condition": "walking"}},
     )
     subject.add_trial(trial.name, trial)
 
@@ -119,15 +121,18 @@ subject.get_trial_by_idx(0).attach_IK_results(str(output / "demo_IK.mot"))
 # subject.get_trial_by_idx(0).attach_ID_results("walking_ID.sto")
 ```
 
-Filter using the trial methods in an explicit loop. `Subject.lowpass_filter()`
-still calls a removed trial method and currently prints errors without filtering.
+Filter using the trial methods in an explicit loop:
 
 ```python
 frames = []
 for name, trial in subject.trials.items():
     trial.lowpass_filter_markers(cutoff_freq=6.0)
+    first_marker = next(iter(trial.markers.values()))
+    if any(not np.array_equal(marker.time, first_marker.time)
+           for marker in trial.markers.values()):
+        raise ValueError("Markers must share timestamps for this table")
     frame = trial.as_df(trial.markers)
-    frame.insert(0, "time", next(iter(trial.markers.values())).time)
+    frame.insert(0, "time", first_marker.time)
     frame["trial_name"] = name
     frame["subject_id"] = subject.id
     frames.append(frame)
@@ -135,11 +140,30 @@ combined = pd.concat(frames, ignore_index=True)
 combined.to_csv(output / "markers.csv", index=False)
 ```
 
-Within a table, require common timestamps across its channels. `trial.as_df()`
-and `subject.as_df("markers")` concatenate samples without aligning time;
-`as_df(time_normalize=True)` currently does not perform normalization. Force
-DataFrame conversion also has obsolete CoP attribute names. For a force table,
-build columns explicitly from `plate.time`, `plate.Fx`, `plate.cop_x`, etc.
+`trial.as_df()` includes scalar fields from `trial.metadata["Project"]`.
+Both it and `subject.as_df("markers")` combine samples by array position; check
+timestamps first and add the time column explicitly. To normalize an interval,
+call `time_normalize()` before creating a table.
+
+`trial.as_df(trial.forces)` includes all force and plate-origin moment
+components, plus `cop_x` and `cop_y`. For all three CoP components and the
+moment-at-CoP vector, build a table from the arrays explicitly:
+
+```python
+from ibo_biomech import ForceData
+
+plate = ForceData(
+    name="forceplate_0", force=np.zeros((3, time.size)),
+    sampling_rate=100.0, time=time,
+    metadata={"unit_force": "N", "unit_moment": "Nm", "unit_position": "m"},
+)
+force_table = pd.DataFrame({"time": plate.time})
+for axis, force, cop, moment in zip("xyz", plate.force, plate.cop, plate.Tz):
+    force_table[f"force_{axis}"] = force
+    force_table[f"cop_{axis}"] = cop
+    force_table[f"moment_at_cop_{axis}"] = moment
+force_table.to_csv(output / "forces.csv", index=False)
+```
 
 `subject.save_cache(cache_dir="output/cache")` writes a local pickle;
 `Subject.load_from_cache("output/cache/P01_cache.pkl")` reads it back. Use caches

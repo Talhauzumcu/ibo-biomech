@@ -4,8 +4,8 @@ Python tools for motion-capture workflows: load C3D and the institute's HDF5
 format, process markers and signals, export OpenSim inputs, and inspect IK/ID
 results. Both file handlers return a `TrialData` containing named channels.
 
-The package is in alpha. See the [current limitations and development priorities](docs/remaining-issues.md)
-for the status of HDF5 saving, force resampling, and coordinate assumptions.
+The package is in alpha. The tutorials below describe the current processing,
+saving, and export workflows.
 
 ## Install
 

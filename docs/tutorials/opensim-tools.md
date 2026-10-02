@@ -66,11 +66,12 @@ TRC using the converter's default rotation and unit conversion.
 
 ## Map force plates and run inverse dynamics
 
-`build_extloads()` assumes **exactly two plates**, with a fixed right/left
-assignment, and model bodies named `calcn_r` and `calcn_l`. `r_idx` uses the
-one-based MOT column numbering, so `r_idx=1` selects `ground_force_1_*` for the
-right foot and plate 2 for the left. It does not detect which foot contacted a
-plate. For other models, more plates, or changing assignments, supply your own
+`build_extloads()` creates **two external-force entries**, with a fixed
+right/left assignment to model bodies `calcn_r` and `calcn_l`. `r_idx` uses
+one-based MOT column numbering: `r_idx=1` selects `ground_force_1_*` for the
+right foot and plate 2 for the left; `r_idx=2` reverses those assignments. Check
+that both plate column sets exist and identify the contacting foot yourself.
+For other models, additional loads, or changing assignments, supply your own
 ExternalLoads XML.
 
 ```python
@@ -98,7 +99,7 @@ disables its coordinate filtering; use a positive value only when appropriate
 for your processing pipeline. Missing start/end times are derived from the IK
 file. Explicitly restrict them to an interval supported by the external loads.
 
-Inspect generated files and OpenSim logs before interpreting results. The
-wrapper currently lacks guaranteed cleanup on exceptions and does not check the
-tool's success return value. These examples document the current calls; executing
-them requires a compatible OpenSim installation and validated model/setup files.
+Inspect generated files and OpenSim logs before interpreting results. A returned
+path identifies the requested output; verify that it exists and contains the
+expected data. Executing these examples requires a compatible OpenSim installation
+and validated model/setup files.

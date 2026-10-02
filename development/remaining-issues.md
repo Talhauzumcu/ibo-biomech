@@ -1,9 +1,14 @@
 # Remaining issues and proposed fixes
 
-Updated **2026-09-24** after implementing the priority 1 fixes. The HDF5 policy
-is **current format only**, as requested: old files must be regenerated from
-source recordings. There are no legacy aliases, layout migrations or scalar
-free-moment compatibility paths.
+Reviewed **2026-10-02** against the current source and automated suite
+(`ibo-biomech` 0.3.6). These are repository development notes, outside the Sphinx
+source tree and public documentation navigation. This review updates the issue
+status and tutorials; it does not implement the outstanding fixes below.
+
+HDF5 force and signal datasets use the current fixed layout. Incompatible files
+must be regenerated from source recordings; scalar free moments and layout
+migrations are unsupported. The four additional event annotation datasets are
+optional when reading, and default to empty strings or zero when absent.
 
 ## Priority 1 review outcome
 
@@ -11,7 +16,7 @@ free-moment compatibility paths.
 | --- | --- | --- |
 | 1. HDF5 force schema | Resolved for the current format | Converter/reader/saver share one schema; required shapes, counts and coordinate metadata are checked and refreshed. |
 | 2. Downsampling | Resolved | Signals are anti-aliased; geometry and clocks are sampled at original indices; validation precedes mutation. |
-| 3. Units and sample metadata | Resolved for markers/forces/analog/EMG | Current units, channels, clocks, frame limits, residuals, camera visibility and virtual status survive saving. |
+| 3. Units and sample metadata | Resolved for markers/forces/analog/EMG within the current scope | Current units, channels, clocks, frame limits, residuals, per-frame type codes and virtual status survive saving. Camera visibility is not represented. |
 | 4. Free-moment vector | Resolved | `Tz` always contains all three components, shape `(3, n_samples)`; scalar/missing HDF5 `Tz` is rejected. |
 | 5. Geometry versus filtering | Resolved | Absent signals use the full sample count; unknown geometry is NaN; rejected operations leave objects unchanged. |
 | 6. C3D ownership/writing | Resolved with an explicit supported scope | The returned trial shares processed containers; markers/analogs are serialized; unsupported derived-force edits are rejected; raw export is separate. |
@@ -20,10 +25,13 @@ free-moment compatibility paths.
 
 ### 1. Current HDF5 force schema
 
-`handlers/_force_schema.py` defines the fixed force layout used by `test_h5_with_all.h5`.
+`ibo_biomech/handlers/_force_schema.py` defines the fixed force layout;
+generated C3D/HDF5 fixtures exercise it without a private reference recording.
 The required arrays are `Force`, `Moment`, `COP`, `Tz`, `Corners`, `Origin`,
-`Position` and `Rotation`; `Time` is optional only when a clock is unavailable.
-`NumSamples`, `CoordinateSystem` and `FreeMomentFrame` must be
+`Position` and `Rotation`. `Time` is optional: a known sampling rate reconstructs
+the clock from source sample indices when it is absent; with neither, time
+remains unknown. `NumSamples`, `StartFrame`, `EndFrame`, `FrameStep`,
+`CoordinateSystem` and `FreeMomentFrame` must be
 consistent. `Corners` is `(3, 4, n)` and `Origin` is `(3, 1)`.
 
 Regenerate older HDF5 files using `FileConverter.c3d_to_h5()`. Files with scalar
@@ -41,8 +49,9 @@ corners, position, orientations and time use matching original indices. Factor
 1 is a validated no-op. A missing rate is inferred from a supplied uniform
 clock; with no rate or clock, time remains unknown.
 
-Low/high-pass filters leave geometry unchanged. All force processing validates
-before changing arrays; filters and downsampling compute results before
+Low/high-pass filters leave geometry unchanged. Filtering, downsampling, cropping,
+rotation, low-force masking and unit conversion validate before changing arrays;
+filters and downsampling compute results before
 assignment. Static geometry can be supplied once to `ForceData` and is expanded
 to the sample count. Missing signals initialize as `(3, n)` zeros. Rotations
 must be proper orthonormal matrices or explicitly unknown. The C3D corner helper
@@ -55,11 +64,18 @@ source frame offsets and clocks are retained. Crop slices the measurement
 metadata too. Unknown residuals are NaN. Force groups refresh units, rates, counts and coordinate metadata.
 Analog/EMG groups persist per-channel units and identifiers.
 
+Camera visibility is no longer a `MarkerData` field. HDF5 saving removes
+`CameraMasks` and `CameraMasksKnown` from labeled trajectories, and processed
+C3D writing reconstructs point metadata from residuals only. Earlier claims of
+camera-visibility preservation were stale.
+
 Saving validates shared shapes/clocks/rates, writes to a temporary file, then
 atomically replaces the destination. Same-path saves are supported. Removed
 loaded channels disappear; collections intentionally skipped during loading
 are preserved. Rigid bodies are saved as supplied. Events outside the saved
 marker frame range are removed. No archival groups or format versions are written.
+Events retain description, context, subject, icon ID and generic flag in both
+HDF5 and processed C3D output, as well as names, source frames and timestamps.
 IK/ID column metadata remains priority 2 work (issues 9 and 11).
 
 ### 4. Vector free moments and exports
@@ -114,7 +130,8 @@ Marker addition and scalar/marker division now preserve timestamps and source
 frame offsets. Addition/marker division reject mismatched supplied clocks and
 units. A missing clock on one operand is still accepted. `parse_EMG_data()`
 preserves analog time but shares the signal array. EMG filtering or assignment
-after reading `processed_data` leaves its cache stale. Empty/single-sample
+after reading `processed_data` leaves its cache stale. Calling `process_emg()`
+returns a fresh envelope but does not update that property cache. Empty/single-sample
 `Data` time vectors still raise indexing errors; repeated/decreasing clocks
 are not consistently rejected across all container types.
 
@@ -148,7 +165,9 @@ Location: `handlers/h5Handler.py` (result saving).
   semantics or remove it from the API.
 - `Subject.lowpass_filter()` calls a removed method and catches every resulting
   error. Dispatch to current per-type filters and return structured failures.
-- Adding the first channel does not initialize a trial's cached rate. Derive
+- Adding the first marker, analog or force channel does not initialize a trial's
+  cached rate, and force downsampling does not refresh `trial.force_rate`. Rigid-body
+  addition does update `rigid_body_rate`. Derive
   labels/rates from current data or update and validate every mutation.
 - `ForceData.__setitem__()` writes to a temporary stack. Implement write-through
   indexing or remove mutable indexing; document the axis meaning of `len()`.
@@ -161,8 +180,9 @@ Locations: `containers/trialData.py`, `subject.py`, `_mixins.py`, `analogData.py
 ### 11. Give result columns their own physical units and clocks
 
 The shared `MotResults.read()` applies angular units to ID forces/moments and
-IK translations. IK skips only the three named pelvis translations when
-converting angles. `add_column()` does not default to the parent time vector;
+IK translations. IK skips the three named pelvis translations and columns with
+explicit non-angle units when converting angles; other imported translations
+still need their unit labels corrected. `add_column()` does not default to the parent time vector;
 `read()` does not clear columns left over from an earlier file.
 
 Keep generic storage parsing unit-neutral. Let IK use known coordinate types
@@ -195,9 +215,11 @@ Location: `analysis/gaitAnalyzer.py`.
 
 ### 13. Remove conversion and OpenSim orchestration traps
 
-Marker-only C3D → HDF5 now writes valid empty analog groups. Convenience C3D converters
+Marker-only C3D → HDF5 writes valid empty analog groups. Convenience C3D converters
 share `.temp_conversion.h5`, so concurrent jobs collide and exceptions leave
-files behind. They also perform unnecessary disk round-trips.
+files behind. They also perform unnecessary disk round-trips. The OpenSim HDF5
+marker helper already creates a unique temporary TRC beside the input HDF5,
+but exceptions can leave it behind; the separate MOT helper uses a fixed path.
 
 Export directly from a loaded trial where possible. Otherwise use unique
 context-managed temporary directories. Add `try/finally` cleanup for OpenSim
@@ -211,21 +233,30 @@ Locations: `biomech_io/file_converter.py`, `handlers/osimHandler.py`,
 
 ## Priority 3: release checks and usability
 
-The automated suite gives **167 passed, 1 expected failure**, with no unexpected
-failures or setup errors. The expected failure is the existing subject filtering
-bug (issue 10). All priority 1 checks are ordinary passing tests. The previous
-marker-division timing failures also pass because virtual markers now retain
-their source clock/frame information.
+On **2026-10-02**, the automated suite gave **352 passed, 1 skipped, 1 expected
+failure**, with no unexpected failures or setup errors. The skip is the optional
+uncommitted `test_h5_with_all.h5` recording. The expected failure is subject
+filtering (issue 10). All priority 1 checks pass, including marker arithmetic
+clock/frame preservation.
 
 Run tests before the PyPI publish job and test installation of the built wheel.
 Fixtures generate small real C3D files and temporary HDF5/MOT files; no ignored
 private recordings are needed for the suite. Add plotting/test extras, a license
-file and tested dependency ranges. The lockfile records 0.3.2, matching
-`pyproject.toml`. Sphinx builds in the documentation deployment workflow;
+file and tested dependency ranges. `uv.lock` records package version **0.3.5**,
+while `pyproject.toml` and `ibo_biomech.__version__` are **0.3.6**; refresh the
+lockfile before release. Sphinx builds in the documentation deployment workflow;
 add runnable examples and pull-request checks. OpenSim execution needs a
 separate optional integration job with a validated model.
 
-## Verification and file-specific undo
+## Additional feature requests
+
+The older root `TODO` also requested unlabeled trajectory support, residual
+information for IK/ID results, and normalization methods on individual
+containers. These remain feature requests. `time_normalize()` exists as a
+standalone utility; `Subject` is implemented and tested, with its filtering
+problem tracked in issue 10 rather than described as wholly unmaintained.
+
+## Verification
 
 ```bash
 .venv/bin/python -m pytest tests -q -rx
@@ -238,13 +269,23 @@ conversion, failed-save destination preservation, selective saves, C3D processed
 versus raw writes, force-edit rejection, source frame offsets, events, point
 validity, channel reordering and duplicate labels.
 
-Separate local checks used `example_data/test_c3d.c3d` (68 markers, five plates)
-and `example_data/06_PRE_GANG_12_15.c3d` (42 markers, two plates) for converted-unit
-HDF5 round trips, MOT export and processed-marker C3D round trips. Original
-recordings and existing output files were not overwritten. Python 3.12.2 and
-pytest 9.1.1 were used. OpenSim execution and a full priority 2/3 audit remain
-outside this implementation.
+The current review uses Python 3.12.2 and pytest 9.1.1. Tutorial examples are
+checked with synthetic signals and generated recording files; OpenSim calls
+are checked against wrapper signatures without executing the tools. Actual
+OpenSim execution requires its bindings and validated models/setup files.
 
-See [implementation details and per-file undo](priority1-changes.md). Saved
-pre-implementation copies include the user's earlier uncommitted work; each
-restore command accepts exactly one file and protects newer edits.
+All **27 executable Python blocks** in the README and non-OpenSim tutorials
+passed. The three OpenSim wrapper calls passed signature checks. Representative
+issues 7-12 were reproduced with temporary inputs: unresolved marker gaps, tiny
+`Data` clocks, EMG aliasing/cache behavior, result retention and unit loss,
+force indexing/rate/DataFrame behavior, stale result columns and initial-load
+gait detection. Conversion/OpenSim lifecycle findings were checked in source.
+
+An offline Sphinx HTML build passed with warnings treated as errors; external
+intersphinx inventories were disabled for that check. Local Markdown links
+resolve, and the built pages, search index and published source copies contain
+neither development page nor links to them.
+
+See [priority 1 implementation notes](priority1-changes.md) for the current
+contracts and coverage. The earlier `.priority1-undo/` directory is absent from
+this checkout, so its restore commands are no longer advertised.

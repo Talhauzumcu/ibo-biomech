@@ -33,10 +33,10 @@ for marker in trial.markers.values():
 trial.lowpass_filter_markers(cutoff_freq=6.0, order=4)
 ```
 
-`clean_nan()` must be called explicitly. It linearly fills interior NaNs without
-a maximum gap length, leaves leading/trailing gaps missing, and currently raises
-for an entirely missing axis. Review gap lengths first. Filtering unresolved
-NaNs can contaminate the whole signal.
+Call `clean_nan()` explicitly for reviewed interior gaps; it interpolates by
+sample index. Check gap lengths before calling it, and require finite samples
+on every axis before filtering. Boundary gaps require separate handling; an
+axis must contain observed samples to interpolate.
 
 ## Create a virtual marker with units and timestamps
 
@@ -53,6 +53,7 @@ mid = MarkerData(
     unit=right.unit,
     sampling_rate=right.sampling_rate,
     time=right.time.copy(),
+    first_frame=right.first_frame,
     virtual=1,
 )
 trial.add_marker(mid)
@@ -137,7 +138,7 @@ rotations and consistent shapes before changing the container. Static geometry
 may be supplied once and is expanded by the constructor.
 
 `first_frame` and `last_frame` remain source analog sample indices after
-downsampling. `frame_step` starts at 1 and is multiplied by each downsampling
+downsampling. `frame_step` defaults to 1 and is multiplied by each downsampling
 factor, so `last_frame = first_frame + (num_samples - 1) * frame_step`.
 For example, 11 samples starting at 100 become source samples 100, 103, 106,
 and 109 after `downsample(3)`. Subsequent crops and HDF5 saves preserve this spacing.
@@ -160,6 +161,7 @@ analog = AnalogData(
 emg = EMGData(
     name=analog.name, data=analog.data.copy(), time=analog.time.copy(),
     sampling_rate=analog.sampling_rate, unit=analog.unit, channel=analog.channel,
+    first_frame=analog.first_frame,
 )
 trial.add_emg(emg)
 envelope = emg.process_emg()
@@ -170,12 +172,12 @@ The implemented pipeline cleans NaNs, high-pass filters at 30 Hz (order 2),
 squares the signal, low-pass filters at 10 Hz (order 2), and normalizes to the
 peak. The returned envelope is dimensionless; it is not MVC-normalized.
 
-`trial.parse_EMG_data([3])` also creates EMG channels from analogs, but currently
-preserves time while sharing the source array. Explicit copying also preserves
-independence. `processed_data` caches the envelope; subsequent
-raw-data edits or filtering do not invalidate that cache. Call `process_emg()`
-again for a fresh result after edits.
+`trial.parse_EMG_data([3])` creates EMG channels from analogs with their time and
+source frame origin, initially sharing the source arrays. Use explicit copies,
+as above, when processing independently. `processed_data` stores the first
+computed envelope. After raw signal edits, use the value returned by
+`process_emg()` directly to compute an envelope from the current data.
 
 For plotting, install `matplotlib`, then use `marker.plot()`, `plate.plot()`,
-`analog.plot()`, or `emg.plot_processed()`. The marker plot currently labels its
-axis as mm even after conversion; check the container's `unit`.
+`analog.plot()`, or `emg.plot_processed()`. Use the container's `unit` when
+interpreting or labeling exported plots.

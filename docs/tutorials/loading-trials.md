@@ -58,8 +58,8 @@ The fixed HDF5 layout stores vector `Tz` of shape `(3, n_samples)`.
 `trial.metadata`. `C3DParameters` preserves the original recording's parameter
 groups, values, descriptions and lock flags; processing signals does not rewrite
 this source snapshot. `trial.as_df()` includes the scalar `Project` fields.
-Files have no format-version attributes or compatibility branches. Flat
-metadata files are unsupported and must be regenerated from their source.
+Files use a fixed layout without format-version attributes. Files with flat
+metadata must be regenerated from their source.
 Selectively skipped signals, including rigid bodies, are preserved
 when saving. Events are filtered to the saved marker source-frame range.
 
@@ -105,7 +105,7 @@ validated against the datasets; files missing them must be regenerated.
 The public signature is `h5_handler.save_data(trial, out_path="output/processed.h5")`.
 It uses the original file as a template and replaces selected datasets.
 
-For a C3D recording with analog channels, the following route supplies geometry
+For a C3D recording, the following route supplies geometry
 directly from the C3D containers and preserves the original units and sample
 counts. It filters the force data, saves it, and checks the reloaded values:
 
@@ -125,9 +125,10 @@ for name, plate in source_trial.forces.items():
 ```
 
 Saving validates shared clocks, units and array shapes before replacing the
-destination atomically; same-path saves are supported. Loaded channel collections
-replace their stored counterparts, including channel removals. Marker residuals,
-camera visibility, virtual status and source frame offsets are preserved/cropped.
+destination atomically; same-path saves are supported. Loaded marker, analog,
+EMG, force and rigid-body collections replace their stored counterparts,
+including channel removals. Marker residuals, per-frame type codes, virtual
+status and source frame offsets are preserved/cropped.
 Analog/EMG units and channel identifiers are retained.
 
 Rigid bodies in `trial.rigid_bodies` are saved and loaded automatically:
@@ -135,9 +136,12 @@ Rigid bodies in `trial.rigid_bodies` are saved and loaded automatically:
 ```python
 from ibo_biomech import RigidBody
 
+marker = next(iter(trial.markers.values()))
 trial.add_rigid_body(RigidBody(
     "pelvis", markers=["LASI", "RASI"],
-    position=np.zeros((3, 100)), rotation=np.eye(3), sampling_rate=100,
+    position=np.zeros((3, marker.num_samples)), rotation=np.eye(3),
+    unit=marker.unit, sampling_rate=marker.sampling_rate,
+    first_frame=marker.first_frame, time=marker.time.copy(),
 ))
 h5_handler.save_data(trial, out_path="output/with_bodies.h5")
 loaded = H5Handler("output/with_bodies.h5").load_data()
@@ -155,27 +159,33 @@ Cropping markers does not change bodies or events in memory. Saving writes the
 supplied body samples without cropping or borrowing the marker clock.
 `load_data(load_rigid_bodies=False)` preserves that collection when saving.
 
-The handler neither creates archival groups nor reads or writes format versions.
-`_atomic_update` only copies the template, applies the requested writes, and
-atomically replaces the destination. It performs no migration or cleanup.
+Saving copies the template, applies the selected writes, and atomically replaces
+the destination. It neither creates archival groups nor adds format versions.
 
 ## Read, edit and save events
 
 `Event` represents one event with `name` (string), `frame` (integer), and
-`time` (seconds). `TrialData.events` is an ordered list because labels such as
-`Foot Strike` may occur repeatedly. The `description` field defaults to an empty
-string. These four fields are the complete event representation.
+`time` (seconds). Optional string fields are `description`, `context`, and
+`subject`; they default to empty strings. The integer fields `icon_id` and
+`generic_flag` default to zero. `TrialData.events` is an ordered list because
+labels such as `Foot Strike` may occur repeatedly.
 
 ```python
 from ibo_biomech import C3DHandler, Event
 
-handler = C3DHandler("example_data/test_c3d_events.c3d")
+handler = C3DHandler("walking.c3d")
 trial = handler.load_data()
 for event in trial.events:
-    print(event.name, event.description, event.frame, event.time)
+    print(event.name, event.context, event.description, event.frame, event.time)
 
 strikes = trial.get_events("Foot Strike")
-trial.add_event(Event(name="contact", frame=180, time=180 / trial.marker_rate))
+marker = next(iter(trial.markers.values()))
+index = min(100, marker.num_samples - 1)
+trial.add_event(Event(
+    name="contact", frame=marker.first_frame + index,
+    time=float(marker.time[index]), description="Reviewed contact",
+    context="Right", subject="P01", icon_id=1, generic_flag=1,
+))
 handler.write_c3d("output/with_events.c3d")
 ```
 
@@ -191,9 +201,10 @@ C3D EVENT times are decoded as `minutes * 60 + seconds`. Legacy header-only
 event times are offset from the first stored frame onto the trial clock.
 
 `FileConverter.c3d_to_h5`, `H5Handler.save_data`, and `H5Handler.load_data`
-preserve event names, descriptions, duplicates, and insertion order. The
-`Events` group contains only `Name`, `Description`, `Frame`, and `Time` datasets.
-Only this layout is read; there are no alternate event formats.
+preserve event annotations, duplicates, and insertion order. HDF5 writes
+`Name`, `Description`, `Frame`, `Time`, `Context`, `Subject`, `IconID`, and
+`GenericFlag` datasets in the `Events` group. Reading requires the first four;
+omitted annotation datasets use the defaults described above.
 
 Use `trial.crop_events(start_frame, end_frame)` to select a half-open
 source-frame range explicitly. Frames and times are never rebased.

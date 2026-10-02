@@ -227,11 +227,10 @@ class OsimHandler:
             model_path: Path to the ``.osim`` model.
             setup_file: Path to the ID setup file.
             mot_file: Path to the MOT file containing motion data (IK results).
-            external_loads_file: Path to the external loads XML file;
-            h5_file: Path to the HDF5 file containing trial data.
+            external_loads_file: Path to the required external loads XML file.
             output_file: Output motion file path for the ID results.
-            initial_time: Start time in seconds; defaults to the TRC start time.
-            final_time: End time in seconds; defaults to the TRC end time.
+            initial_time: Start time in seconds; defaults to the IK file's first time.
+            final_time: End time in seconds; defaults to the IK file's last time.
             lowpass_cutoff: Low-pass cutoff frequency for IK filtering; defaults to -1.0 (no filtering).
             log_file: Path to the log file for the ID process.
         Returns:

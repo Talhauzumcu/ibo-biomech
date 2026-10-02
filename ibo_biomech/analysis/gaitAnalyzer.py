@@ -19,29 +19,30 @@ class GaitAnalyzer:
 
     @staticmethod
     def get_plate_contacts(trialdata, bodyweight, marker_re, marker_li, threshold=20, threshold_multiplier=1.2, prominence_multiplier=0.8):
-        """
+        """Detect force-peak contacts on synchronized, Z-up trial data.
+
+        Force samples must share the analog rate and the marker time origin.
+        Use complete contacts with one qualifying peak each and plates unloaded
+        at the first sample. Foot assignment compares the two markers' heights.
+
         Args:
-            trialdata : TrialData
-                TrialData object containing the trial data.
-            marker_re : str
-                Name of right foot marker (will be used for determining foot contact).
-            marker_li : str
-                Name of left foot marker (will be used for determining foot contact).
-            threshold : float
-                Force threshold in Newtons for detecting contact. Defaults to 20 N.
-            threshold_multiplier : float
-                Multiplier for bodyweight to set the peak height threshold. Defaults to 1.2.
-            prominence_multiplier : float
-                Multiplier for bodyweight to set the peak prominence threshold. Defaults to 0.8
+            trialdata: TrialData containing markers, forces and an analog rate.
+            bodyweight: Body weight as a force in newtons, not mass in kilograms.
+            marker_re: Right foot marker name.
+            marker_li: Left foot marker name.
+            threshold: Touchdown/toe-off force threshold in newtons. Defaults to 20.
+            threshold_multiplier: Body-weight multiplier for peak height.
+                Defaults to 1.2.
+            prominence_multiplier: Body-weight multiplier for peak prominence.
+                Defaults to 0.8.
+
         Returns:
-            events : dict
-                Dictionary containing the following keys:
-                    - "plateNames": np.ndarray of plate names (0-based) for each detected contact, sorted by time.
-                    - "feet": np.ndarray of "L"/"R" labels for each detected contact, sorted by time.
-                    - "TDa": np.ndarray of Touchdown indices (analog samples), sorted by time.
-                    - "TOa": np.ndarray of Toe-off indices (analog samples), sorted by time.
-                    - "TDv": np.ndarray of Touchdown indices (video frames), sorted by time.
-                    - "TOv": np.ndarray of Toe-off indices (video frames), sorted by time.    
+            dict: Contacts sorted by force-peak sample index. ``plateNames``
+            contains string mapping keys such as ``forceplate_0`` and ``feet``
+            contains ``L``/``R``. ``TDa``/``TOa`` are force-array indices;
+            ``TDv``/``TOv`` are rounded marker-array indices, not source frame
+            numbers. All values are ``None`` when no contacts are found.
+            The result does not populate ``trialdata.events``.
         """
         # Constants
         tdto_threshold = threshold # Newton
@@ -155,8 +156,9 @@ class GaitAnalyzer:
     def get_stancetimes_steplengths(markerDict, events, aFrq):
         """Calculate stance times and step lengths from detected gait events.
         
-        This function was copied from the original source and may require refactoring
-        as it contains a hardcoded marker name reference.
+        Requires markers named ``LTOE`` and ``RTOE`` and complete contact indices.
+        Step displacement is along X between consecutive touchdown positions,
+        in the marker length unit.
         
         Args:
             markerDict : dict
@@ -168,11 +170,8 @@ class GaitAnalyzer:
                 Analog sample rate (Hz).
                 
         Returns:
-            stanceTimes : list
-                List of stance times in seconds for each foot contact.
-            stepLengths : list
-                List of step lengths. First element is None; subsequent elements
-                contain step length measurements between consecutive contacts.
+            tuple: Stance times in seconds and step displacements. The first
+            step displacement is ``None``.
         """
         stanceTimes = []
         stepLengths = []

@@ -15,9 +15,8 @@ and gait tutorials without a recording. Examples on each tutorial page run in
 order unless marked as an alternative. File-based examples require your own
 recordings, models, and setup files; their paths and labels are placeholders.
 
-The package is in alpha. The [remaining issues](remaining-issues.md) page records
-verified limitations and proposed fixes, including workflows that are currently
-unsuitable for saving or exporting processed data.
+The package is in alpha. Each tutorial describes the inputs and coordinate
+assumptions required for its workflow.
 
 ```{toctree}
 :caption: Tutorials
@@ -43,6 +42,7 @@ api/forcedata
 api/analogdata
 api/emgdata
 api/events
+api/rigidbody
 api/trialdata
 api/subject
 api/data
@@ -53,12 +53,4 @@ api/osimHandler
 api/gaitanalyzer
 api/utils
 api/_mixins
-```
-
-```{toctree}
-:caption: Development
-:maxdepth: 1
-
-remaining-issues
-priority1-changes
 ```

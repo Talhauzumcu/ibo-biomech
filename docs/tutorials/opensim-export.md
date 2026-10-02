@@ -110,7 +110,7 @@ The OpenSim methods accept `axis`, `angle`, and `convert_to_meters` (not
 | `c3d_to_mot` | `c3d_path, mot_path` | Uses the current HDF5 force-export route. |
 | `c3d_to_opensim` | `c3d_path, mot_path, trc_path` | Uses the current HDF5 force-export route. |
 
-For a C3D recording with analog channels, this alternative creates HDF5 metadata
+For a C3D recording, this alternative creates HDF5 metadata
 and exports its markers:
 
 ```python
@@ -128,5 +128,6 @@ FileConverter.h5_to_trc(
 
 For markers already in the target frame and units, `h5_to_trc(..., angle=0,
 convert_to_meters=False)` avoids applying the default transform again. Direct
-C3D convenience converters share a temporary filename; do not run them
-concurrently until unique temporary paths are implemented.
+C3D convenience converters should be run sequentially. For concurrent exports,
+load separate trials and use `write_trc()` / `write_mot()` with distinct outputs,
+as in the processed-trial example.

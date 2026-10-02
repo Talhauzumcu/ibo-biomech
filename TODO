@@ -1,5 +1,10 @@
-# Add unlabeled trajectory implementation
-#IK and ID data should have residual informations
-#Adding time normalization to individual containers could be nice? Do I need to be careful if they already have time information?
-#unlabaled trajectories need to be handled
-#Subject class is not maintained.
+Development backlog: development/remaining-issues.md
+
+Open feature requests:
+- Load and preserve unlabeled trajectories.
+- Define residual/error information for IK and ID results.
+- Consider per-container normalization methods; the time_normalize utility
+  already normalizes equally spaced 1D signals to a percentage axis.
+
+Subject grouping and caching are maintained and tested. The subject-level
+filter dispatch problem is tracked as issue 10 in the development backlog.

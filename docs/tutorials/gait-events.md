@@ -5,6 +5,12 @@ workflow. It assumes +Z is vertical, the lower of two foot markers identifies th
 contacting foot, and force samples share the analog sampling rate and time origin.
 Run it in acquisition coordinates before a Z-up to Y-up export rotation.
 
+Use uniform, synchronized marker/force clocks with the same first timestamp,
+matching force and analog rates, and complete contacts that begin and end within
+the recording. Each contact should have one qualifying force peak, and every
+plate should be unloaded at the start. Check the marker traces used for foot
+assignment before analyzing a recording.
+
 The following synthetic example demonstrates the API, not validation of event
 detection for real walking, running, or pathological gait.
 
@@ -59,8 +65,11 @@ strings such as `forceplate_0`, not numeric plate indices.
 if events["feet"] is None:
     print("No contacts detected")
 else:
-    if not (np.isfinite(events["TDa"]).all() and np.isfinite(events["TOa"]).all()):
+    if not all(np.isfinite(events[key]).all() for key in ("TDa", "TOa")):
         raise ValueError("A contact extends beyond the available recording")
+    for key in ("TDv", "TOv"):
+        if np.any(events[key] < 0) or np.any(events[key] >= marker_time.size):
+            raise ValueError("A contact is outside the available marker samples")
     for name, foot, touchdown, toeoff in zip(
         events["plateNames"], events["feet"], events["TDa"], events["TOa"],
     ):
@@ -72,24 +81,16 @@ else:
     print(stance_times, step_lengths)
 ```
 
-`TDa`/`TOa` are force/analog indices and `TDv`/`TOv` are rounded marker indices.
+`TDa`/`TOa` are force/analog array indices and `TDv`/`TOv` are rounded marker
+array indices. They are relative to the supplied arrays, unlike `Event.frame`,
+which is a source frame number. The returned dictionary does not populate
+`trial.events` automatically.
 The stance/step helper specifically requires markers named `LTOE` and `RTOE`.
 It computes step displacement along X between consecutive touchdown positions,
 in the marker length unit. Its first step-length entry is `None`.
 
-## Current limitations to account for
-
-- A plate loaded above threshold at the very first sample causes every contact
-  on that plate to be skipped, including later complete contacts.
-- Multiple force peaks within one contact may produce duplicate events.
-- The rate-ratio mapping ignores time offsets and can round beyond the last
-  marker sample. Cropped, resampled, or asynchronous signals need alignment.
-- A missing touchdown/toe-off remains NaN; marker-index conversion can emit
-  warnings before this tutorial's result check.
-- No-contact results contain `None`; handle that before calling the stance helper.
-- Foot assignment uses marker height only; it does not compare foot location
-  with plate geometry. The step displacement is unsuitable as a general
-  treadmill step-length calculation.
-
-Inspect force and marker traces against the detected events. Proposed repairs
-are recorded in [remaining issues](../remaining-issues.md).
+No-contact results contain `None`, so the example checks for contacts before
+calling the stance helper. Inspect force and marker traces against the detected
+events. The X displacement reported here describes consecutive touchdown
+positions in the lab frame; choose an appropriate definition for treadmill
+step-length analysis.
