@@ -15,6 +15,8 @@ def assert_plate_unchanged(actual, before):
     for name in ('force', 'moment', 'cop', 'Tz', 'position', 'corners', 'rotation', 'origin', 'time'):
         np.testing.assert_array_equal(getattr(actual, name), getattr(before, name))
     assert actual.num_samples == before.num_samples
+    assert (actual.first_frame, actual.last_frame, actual.frame_step) == (
+        before.first_frame, before.last_frame, before.frame_step)
     assert actual.sampling_rate == before.sampling_rate
     assert actual.metadata == before.metadata
 

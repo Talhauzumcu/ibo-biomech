@@ -146,6 +146,7 @@ class C3DHandler:
                     sampling_rate=analog_rate,
                     unit=units[i].strip() if i < len(units) else "",
                     channel=i,
+                    first_frame=int(self.c3d_data['header']['analogs']['first_frame']),
                     time=self.c3d_data['header']['points']['first_frame'] /
                          self.c3d_data['parameters']['POINT']['RATE']['value'][0] +
                          np.arange(len(analog_signal)) / analog_rate
@@ -189,6 +190,7 @@ class C3DHandler:
                 corners=corners,
                 origin=plate['origin'],
                 metadata=metadata,
+                first_frame=int(self.c3d_data['header']['analogs']['first_frame']),
                 sampling_rate=self.c3d_data['parameters']['ANALOG']['RATE']['value'][0],
                 time=self.c3d_data['header']['points']['first_frame'] /
                      self.c3d_data['parameters']['POINT']['RATE']['value'][0] +
@@ -303,6 +305,9 @@ class C3DHandler:
             indices = np.searchsorted(original.time, plate.time)
             if np.any(indices >= len(original.time)) or not np.allclose(original.time[indices], plate.time, atol=1e-9, rtol=0):
                 raise ValueError('C3D force clock must select original samples; use HDF5/MOT for resampled forces.')
+            if (plate.frame_step != original.frame_step or
+                    plate.first_frame != original.first_frame + int(indices[0]) * original.frame_step):
+                raise ValueError('C3D force frame indices must match the source analog samples; use HDF5/MOT.')
             for field in ('force', 'moment', 'cop', 'Tz', 'corners', 'position', 'rotation'):
                 if not np.allclose(getattr(plate, field), getattr(original, field)[..., indices], equal_nan=True):
                     raise ValueError('Processed force vectors cannot be reconstructed as calibrated C3D analogs; '
@@ -354,6 +359,8 @@ class C3DHandler:
             ratio = analog_rate / rate
             if not np.isclose(ratio, round(ratio)) or na != n * round(ratio) or not np.isclose(analog_time[0], time[0], atol=1e-9):
                 raise ValueError('C3D analogs must cover the same interval at an integer multiple of the point rate.')
+            if next(iter(trial.analogs.values())).first_frame != frame * round(ratio):
+                raise ValueError('C3D analog first_frame must match the marker origin at the analog rate.')
             channel_map = {channel.channel: i + 1 for i, channel in enumerate(trial.analogs.values())}
             if len(channel_map) != len(trial.analogs):
                 raise ValueError('C3D analog source channel identifiers must be unique.')

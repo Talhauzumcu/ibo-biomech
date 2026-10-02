@@ -34,7 +34,7 @@ class TrialData:
         rigid_bodies: Mapping of body name to :class:`RigidBody`.
         events: Ordered list of :class:`Event`; names may repeat.
         emgs: Mapping of channel name to :class:`EMGData`.
-        metadata: Free-form trial metadata.
+        metadata: Nested FileInfo, Project, Location and C3DParameters metadata.
         marker_labels: Cached list of marker labels (set in ``__post_init__``).
         analog_labels: Cached list of analog labels (set in ``__post_init__``).
         marker_rate: Marker sampling rate in Hz (set in ``__post_init__``).
@@ -78,6 +78,7 @@ class TrialData:
                     sampling_rate=analog.sampling_rate,
                     unit=analog.unit,
                     channel=analog.channel,
+                    first_frame=analog.first_frame,
                     time=analog.time
                 )
                 self.emgs[analog.name] = emg
@@ -331,7 +332,7 @@ class TrialData:
 
     def as_df(self, data_dict: Dict[str, Any], time_normalize=False) -> pd.DataFrame:
         """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include
-        the metadata for easy plotting and analysis.
+        the Project metadata for easy plotting and analysis.
         
         Args:
             data_dict: Dictionary of data objects (MarkerData, ForceData, AnalogData, etc.)
@@ -360,8 +361,8 @@ class TrialData:
                     df[f'{key}_{angle}'] = row
             else:
                 df[key] = value.data
-        for key, value in self.metadata.items():
-            if isinstance(value, np.ndarray):
+        for key, value in self.metadata.get('Project', {}).items():
+            if isinstance(value, (np.ndarray, dict)):
                 #Skip if the metadata is an array, as it will not fit into a column of the dataframe
                 continue
             df[key] = value

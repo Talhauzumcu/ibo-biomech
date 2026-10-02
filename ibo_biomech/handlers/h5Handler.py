@@ -23,13 +23,10 @@ class H5Handler:
     The dataset layout is fixed. Each signal collection is saved as supplied;
     events outside the saved marker frame range are discarded.
 
-    Metadata fields (``SubjectID``, ``Condition``, ``BodyMass``, ...) are
-    intentionally outside the scope of this handler. To update them after
-    saving, use h5py directly::
-
-        with h5py.File("trial_processed.h5", "r+") as f:
-            f["MetaData"].attrs["SubjectID"] = "P01"
-            f["MetaData"].attrs["Condition"] = "walking"
+    Metadata uses the nested FileInfo, Project, Location and C3DParameters
+    groups. Use ``modify_metadata({'Project': {'SubjectID': 'P01'}})`` to
+    edit file attributes. ``save_data`` preserves the template's metadata
+    and refreshes FileInfo/LastUpdate; it does not save edits to trial.metadata.
 
     Attributes:
         h5_path: Path to the source HDF5 file.
@@ -84,7 +81,7 @@ class H5Handler:
             emgs = self._load_emgs(h5f) if load_emgs else {}
             ik_results = self._load_ik_results(h5f) if load_ik_results else None
             id_results = self._load_id_results(h5f) if load_id_results else None
-            metadata = dict(h5f["MetaData"].attrs)
+            metadata = self._load_metadata(h5f)
 
         trial = TrialData(
             name=self.trial_name,
@@ -109,14 +106,14 @@ class H5Handler:
         """Read the file into a subject populated from its metadata.
 
         Builds a :class:`~ibo_biomech.containers.Subject` from the file's
-        ``MetaData`` attributes and attaches the loaded trial to it.
+        ``MetaData/Project`` attributes and attaches the loaded trial to it.
 
         Returns:
             A :class:`~ibo_biomech.containers.Subject` containing the trial.
         """
         trial_data = self.load_data()
         with h5py.File(self.h5_path, "r") as h5f:
-            meta = h5f["MetaData"].attrs
+            meta = h5f["MetaData/Project"].attrs
             subject_id = meta.get("SubjectID", "")
             condition = meta.get("Condition", "")
             body_mass = meta.get("BodyMass", None)
@@ -126,6 +123,41 @@ class H5Handler:
         subject = Subject(id=subject_id, condition=condition, body_mass=body_mass, body_height=body_height, age=age)
         subject.add_trial(trial_name=trial_data.name, trial_data=trial_data)
         return subject
+
+    @staticmethod
+    def _load_metadata(h5f):
+        """Read the single supported nested metadata layout."""
+        meta = h5f.get('MetaData')
+        required = {'FileInfo', 'Project', 'Location', 'C3DParameters'}
+        if (not isinstance(meta, h5py.Group) or len(meta.attrs) or
+                not required <= set(meta)):
+            raise ValueError('MetaData requires FileInfo, Project, Location and C3DParameters '
+                             'groups without root attributes; regenerate incompatible files.')
+
+        def read(group):
+            if not isinstance(group, h5py.Group):
+                raise ValueError('Metadata entries must be groups with attributes.')
+            result = dict(group.attrs)
+            for name, child in group.items():
+                if name in result:
+                    raise ValueError(f'{group.name}: metadata group and attribute names must differ.')
+                result[name] = read(child)
+            return result
+
+        return read(meta)
+
+    @staticmethod
+    def _update_metadata_group(group, updates):
+        """Merge nested updates while preserving unrelated metadata attributes."""
+        for name, value in updates.items():
+            if isinstance(value, dict):
+                if name in group.attrs:
+                    raise ValueError(f'{group.name}/{name} is a metadata attribute, not a group.')
+                H5Handler._update_metadata_group(group.require_group(name), value)
+            else:
+                if name in group:
+                    raise ValueError(f'{group.name}/{name} is a metadata group, not an attribute.')
+                group.attrs[name] = value
 
     @staticmethod
     def _replace_dataset(group, name, value):
@@ -150,7 +182,11 @@ class H5Handler:
                     if marker.first_frame != first.first_frame:
                         raise ValueError('Markers must share a first_frame.')
             else:
+                first = next(iter(channels.values()))
                 for channel in channels.values():
+                    channel.validate_sample_metadata()
+                    if channel.first_frame != first.first_frame:
+                        raise ValueError('Channels in one dataset must share a first_frame.')
                     if channel.channel is not None and not isinstance(channel.channel, (int, np.integer)):
                         raise ValueError('Channel identifiers must be integers or None.')
         if 'forces' not in skipped:
@@ -184,6 +220,7 @@ class H5Handler:
         try:
             shutil.copy2(self.h5_path, temporary)
             with h5py.File(temporary, 'r+') as h5f:
+                self._load_metadata(h5f)
                 update(h5f)
             os.replace(temporary, destination)
         finally:
@@ -210,14 +247,24 @@ class H5Handler:
                     if name in labeled:
                         del labeled[name]
             self._save_events(h5f, trial)
-            h5f.require_group('MetaData').attrs['LastUpdate'] = str(datetime.now())
+            h5f['MetaData/FileInfo'].attrs['LastUpdate'] = str(datetime.now())
         return self._atomic_update(out_path, update)
 
     def modify_metadata(self, updates: Dict[str, Any], out_path: Optional[str] = None) -> H5Handler:
-        """Atomically update metadata, including same-path saves."""
+        """Atomically merge nested updates, e.g. {'Project': {'SubjectID': 'P01'}}.
+
+        Omitted fields are preserved. Flat updates and flat metadata files are
+        unsupported. FileInfo/LastUpdate is refreshed after every update.
+        """
+        if (not isinstance(updates, dict) or
+                not set(updates) <= {'FileInfo', 'Project', 'Location', 'C3DParameters'} or
+                not all(isinstance(value, dict) for value in updates.values())):
+            raise ValueError('Metadata updates must be nested under FileInfo, Project, '
+                             'Location or C3DParameters.')
         out_path = self.h5_path if out_path is None else out_path
         def update(h5f):
-            h5f.require_group('MetaData').attrs.update(updates)
+            self._update_metadata_group(h5f['MetaData'], updates)
+            h5f['MetaData/FileInfo'].attrs['LastUpdate'] = str(datetime.now())
         self._atomic_update(out_path, update)
         return H5Handler(out_path)
 
@@ -256,11 +303,13 @@ class H5Handler:
         if channels:
             n, time, rate = collection_clock(channels)
             data = np.stack([channel.data for channel in channels.values()])
+            start = next(iter(channels.values())).first_frame
         else:
             n, time, rate, data = 0, None, None, np.empty((0, 0))
+            start = 0
         self._replace_dataset(group, 'Data', data)
         self._replace_dataset(group, 'Time', time)
-        group.attrs.update(Labels=list(channels), NumSamples=n,
+        group.attrs.update(Labels=list(channels), NumSamples=n, StartFrame=start, EndFrame=start + n - 1,
                            Units=[channel.unit or '' for channel in channels.values()],
                            Channels=[channel.channel if channel.channel is not None else -1
                                      for channel in channels.values()])
@@ -371,6 +420,8 @@ class H5Handler:
         data = group['Data'][:]
         if data.ndim != 3 or data.shape[:2] != (len(labels), 4):
             raise ValueError('Marker Data must have shape (markers, 4, frames).')
+        if not {'StartFrame', 'EndFrame', 'NumFrames'} <= set(traj.attrs):
+            raise ValueError('Trajectories requires StartFrame, EndFrame and NumFrames.')
         time = group['Time'][:] if 'Time' in group else None
         residuals = group['Residuals'][:] if 'Residuals' in group else None
         if residuals is not None and residuals.shape != (len(labels), data.shape[-1]):
@@ -381,7 +432,8 @@ class H5Handler:
         for i, label in enumerate(labels):
             result[label] = MarkerData(name=label, x=data[i, 0], y=data[i, 1], z=data[i, 2],
                 unit=group.attrs.get('Unit', 'mm'), sampling_rate=traj.attrs.get('SamplingFrequency'),
-                time=time, first_frame=int(traj.attrs.get('StartFrame', 0)), virtual=int(virtual[i]),
+                time=time, first_frame=traj.attrs['StartFrame'], last_frame=traj.attrs['EndFrame'],
+                num_samples=traj.attrs['NumFrames'], virtual=int(virtual[i]),
                 residuals=residuals[i] if residuals is not None else None,
                 sample_types=types[i] if types is not None else None)
         return result
@@ -400,8 +452,12 @@ class H5Handler:
         data = group['Data'][:]
         if data.ndim != 2 or data.shape[0] != len(labels):
             raise ValueError(f'{name}: Data must have shape (channels, samples).')
+        if not {'StartFrame', 'EndFrame', 'NumSamples'} <= set(group.attrs):
+            raise ValueError(f'{name}: StartFrame, EndFrame and NumSamples are required.')
         time = group['Time'][:] if 'Time' in group else None
         return {label: cls(name=label, data=data[i], time=time, unit=units[i],
+                           first_frame=group.attrs['StartFrame'], last_frame=group.attrs['EndFrame'],
+                           num_samples=group.attrs['NumSamples'],
                            sampling_rate=group.attrs.get('SamplingFrequency'),
                            channel=int(channels[i]) if channels[i] >= 0 else None)
                 for i, label in enumerate(labels)}
@@ -485,7 +541,8 @@ class H5Handler:
         group = h5f.create_group('RigidBodies', track_order=True)
         for index, body in enumerate(trial.rigid_bodies.values()):
             target = group.create_group(str(index))
-            target.attrs.update(Name=body.name, NumSamples=body.num_samples, Unit=body.unit)
+            target.attrs.update(Name=body.name, NumSamples=body.num_samples, Unit=body.unit,
+                                StartFrame=body.first_frame, EndFrame=body.last_frame)
             if body.sampling_rate is not None:
                 target.attrs['SamplingFrequency'] = body.sampling_rate
             for key, value in [('Position', body.position), ('Rotation', body.rotation), ('Time', body.time)]:
@@ -504,8 +561,9 @@ class H5Handler:
             missing = {'Position', 'Rotation', 'Markers'} - set(group)
             if missing:
                 raise ValueError(f'{group.name}: missing required datasets: {sorted(missing)}.')
-            if not {'Name', 'NumSamples', 'Unit'} <= set(group.attrs):
-                raise ValueError(f'{group.name}: Name, NumSamples and Unit attributes are required.')
+            if not {'Name', 'NumSamples', 'Unit', 'StartFrame', 'EndFrame'} <= set(group.attrs):
+                raise ValueError(f'{group.name}: Name, NumSamples, Unit, StartFrame and EndFrame '
+                                 'attributes are required.')
             name = group.attrs['Name']
             name = name.decode() if isinstance(name, bytes) else name
             if not isinstance(name, str) or name in bodies:
@@ -525,6 +583,8 @@ class H5Handler:
             rate = group.attrs.get('SamplingFrequency')
             bodies[name] = RigidBody(name=name, markers=self._decode_labels(markers[:]),
                 position=position, rotation=rotation, unit=unit,
+                first_frame=group.attrs['StartFrame'], last_frame=group.attrs['EndFrame'],
+                num_samples=group.attrs['NumSamples'],
                 sampling_rate=rate, time=time)
         return bodies
 

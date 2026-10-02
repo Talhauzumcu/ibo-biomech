@@ -136,6 +136,12 @@ orientations at matching original indices. It validates uniform clocks, proper
 rotations and consistent shapes before changing the container. Static geometry
 may be supplied once and is expanded by the constructor.
 
+`first_frame` and `last_frame` remain source analog sample indices after
+downsampling. `frame_step` starts at 1 and is multiplied by each downsampling
+factor, so `last_frame = first_frame + (num_samples - 1) * frame_step`.
+For example, 11 samples starting at 100 become source samples 100, 103, 106,
+and 109 after `downsample(3)`. Subsequent crops and HDF5 saves preserve this spacing.
+
 Access writable signals through `plate.force`, `plate.moment`, `plate.cop` or
 `plate.Tz`; stacked `plate.data` is a copy. `Tz` is the full moment-at-CoP vector,
 in the same coordinate frame as force/CoP, rather than a scalar vertical moment.

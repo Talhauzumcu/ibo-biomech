@@ -23,6 +23,8 @@ def read_plate(group):
     if force.ndim != 2 or force.shape[0] != 3:
         raise ValueError(f'{group.name}: Force must have shape (3, n_samples).')
     n = force.shape[1]
+    if not {'StartFrame', 'EndFrame', 'FrameStep'} <= set(group.attrs):
+        raise ValueError(f'{group.name}: StartFrame, EndFrame and FrameStep are required.')
     if group.attrs.get('NumSamples') != n:
         raise ValueError(f'{group.name}: NumSamples does not match Force.')
     for field, shape in [('moment', (3, n)), ('cop', (3, n)), ('Tz', (3, n)),
@@ -42,6 +44,8 @@ def read_plate(group):
     if isinstance(name, bytes):
         name = name.decode()
     return ForceData(name=name, metadata=metadata, **values,
+                     first_frame=group.attrs['StartFrame'], last_frame=group.attrs['EndFrame'],
+                     num_samples=group.attrs['NumSamples'], frame_step=group.attrs['FrameStep'],
                      sampling_rate=group.attrs.get('SamplingFrequency'),
                      coordinateSystem=group.attrs['CoordinateSystem'])
 
@@ -58,7 +62,8 @@ def write_plate(group, plate):
     group.attrs.update(Name=plate.name,
                        CoordinateSystem=int(plate.coordinateSystem),
                        FreeMomentFrame='global' if plate.coordinateSystem else 'local',
-                       NumSamples=plate.num_samples, unit_force=plate.unit_force,
+                       NumSamples=plate.num_samples, StartFrame=plate.first_frame,
+                       EndFrame=plate.last_frame, FrameStep=plate.frame_step, unit_force=plate.unit_force,
                        unit_moment=plate.unit_moment, unit_position=plate.unit_cop)
     for key in ('SamplingFrequency', 'SamplingFactor'):
         if key in group.attrs:

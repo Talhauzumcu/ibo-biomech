@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from ibo_biomech.utils.utils import apply_filter, validate_crop_range
 from ._mixins import ArrayLikeMixin
+from ._validation import validate_sample_range
 
 @dataclass
 class AnalogData(ArrayLikeMixin):
@@ -21,6 +22,9 @@ class AnalogData(ArrayLikeMixin):
         sampling_rate: Sampling frequency in Hz. Required for filtering.
         unit: Physical unit of the signal (e.g. ``"V"``).
         channel: Hardware channel index this signal came from, if known.
+        first_frame: Source sample index of the first retained sample.
+        last_frame: Inclusive source sample index of the last retained sample.
+        num_samples: Sample count, derived from data.
     """
     name: str
     data: np.ndarray
@@ -28,11 +32,20 @@ class AnalogData(ArrayLikeMixin):
     sampling_rate: float = None
     unit: str = ""
     channel: Optional[int] = None
+    first_frame: int = 0
+    last_frame: Optional[int] = None
+    num_samples: Optional[int] = None
 
     def __post_init__(self):
+        self.num_samples, self.last_frame = validate_sample_range(
+            len(self.data), self.first_frame, self.last_frame, self.num_samples, initialize=True)
         if self.time is None and self.sampling_rate is not None:
-            self.time = np.arange(len(self.data)) / self.sampling_rate
-            
+            self.time = (self.first_frame + np.arange(len(self.data))) / self.sampling_rate
+
+    def validate_sample_metadata(self):
+        """Validate source indices against the current signal length."""
+        validate_sample_range(len(self.data), self.first_frame, self.last_frame, self.num_samples)
+
     def get_data(self) -> np.ndarray:
         """Return the raw signal samples.
 
@@ -49,8 +62,13 @@ class AnalogData(ArrayLikeMixin):
             end_idx: First sample index to drop (exclusive).
         """
         validate_crop_range(start_idx, end_idx, len(self.data))
+        self.validate_sample_metadata()
         self.data = self.data[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
+
+        self.num_samples = len(self.data)
+        self.first_frame += start_idx
+        self.last_frame = self.first_frame + self.num_samples - 1
 
     def lowpass_filter(self, cutoff: float, order: int = 4) -> None:
         """Apply a zero-phase low-pass Butterworth filter in place.
@@ -102,4 +120,3 @@ class AnalogData(ArrayLikeMixin):
     def __str__(self) -> str:
         """Return the same concise summary as :meth:`__repr__`."""
         return self.__repr__()
-

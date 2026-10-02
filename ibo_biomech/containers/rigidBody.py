@@ -6,7 +6,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from ibo_biomech.utils.utils import get_rotation_matrix, validate_crop_range
-from ._validation import validate_clock
+from ._validation import validate_clock, validate_sample_range
 
 
 @dataclass
@@ -26,6 +26,8 @@ class RigidBody:
         unit: Position unit, default ``'mm'``.
         sampling_rate: Optional sampling frequency in Hz.
         time: Optional sample timestamps in seconds.
+        first_frame: Source sample index of the first retained pose.
+        last_frame: Inclusive source sample index of the last retained pose.
     """
 
     name: str
@@ -35,7 +37,9 @@ class RigidBody:
     unit: str = 'mm'
     sampling_rate: Optional[float] = None
     time: Optional[np.ndarray] = None
-    num_samples: int = field(init=False)
+    first_frame: int = 0
+    num_samples: Optional[int] = None
+    last_frame: Optional[int] = None
 
     def __post_init__(self):
         self.markers = list(self.markers)
@@ -48,7 +52,8 @@ class RigidBody:
         self.position = np.array(self.position, dtype=float, copy=True)
         if self.position.ndim != 2 or self.position.shape[0] != 3 or not self.position.shape[1]:
             raise ValueError('position must have shape (3, n_samples), n_samples > 0.')
-        self.num_samples = self.position.shape[1]
+        self.num_samples, self.last_frame = validate_sample_range(
+            self.position.shape[1], self.first_frame, self.last_frame, self.num_samples, initialize=True)
         self._validate_pose_array('position', self.position, (3, self.num_samples))
 
     def _initialize_time(self) -> None:
@@ -57,7 +62,7 @@ class RigidBody:
             self.time = np.array(self.time, dtype=float, copy=True)
         elif self.sampling_rate is not None:
             validate_clock(None, self.num_samples, self.sampling_rate)
-            self.time = np.arange(self.num_samples) / self.sampling_rate
+            self.time = (self.first_frame + np.arange(self.num_samples)) / self.sampling_rate
         validate_clock(self.time, self.num_samples, self.sampling_rate)
 
     def set_rotation(self, rotation: Optional[np.ndarray]) -> None:
@@ -107,6 +112,7 @@ class RigidBody:
         """
         self._validate_pose_array('position', self.position, (3, self.num_samples))
         self._validate_rotation(self.rotation)
+        validate_sample_range(self.position.shape[1], self.first_frame, self.last_frame, self.num_samples)
         return validate_clock(self.time, self.num_samples, self.sampling_rate)
 
     @property
@@ -134,6 +140,8 @@ class RigidBody:
         self.rotation = self.rotation[..., start_idx:end_idx].copy()
         self.time = self.time[start_idx:end_idx].copy() if self.time is not None else None
         self.num_samples = self.position.shape[1]
+        self.first_frame += start_idx
+        self.last_frame = self.first_frame + self.num_samples - 1
 
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate position and orientation about a global coordinate axis."""

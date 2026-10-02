@@ -52,9 +52,15 @@ print(trial.name, trial.metadata)
 print(trial.marker_labels, trial.marker_rate)
 ```
 
-The fixed HDF5 layout follows `test_h5_with_all.h5`, with vector `Tz` of shape
-`(3, n_samples)`. Files have no format-version attributes or compatibility
-branches. Selectively skipped signals, including rigid bodies, are preserved
+The fixed HDF5 layout stores vector `Tz` of shape `(3, n_samples)`.
+`MetaData` contains four groups: `FileInfo`, `Project`, `Location`, and
+`C3DParameters`. Their attributes are exposed as nested dictionaries in
+`trial.metadata`. `C3DParameters` preserves the original recording's parameter
+groups, values, descriptions and lock flags; processing signals does not rewrite
+this source snapshot. `trial.as_df()` includes the scalar `Project` fields.
+Files have no format-version attributes or compatibility branches. Flat
+metadata files are unsupported and must be regenerated from their source.
+Selectively skipped signals, including rigid bodies, are preserved
 when saving. Events are filtered to the saved marker source-frame range.
 
 ## Add metadata without processing arrays
@@ -67,16 +73,32 @@ from pathlib import Path
 
 Path("output").mkdir(exist_ok=True)
 annotated = h5_handler.modify_metadata(
-    {"SubjectID": "P01", "Condition": "walking", "BodyMass": 70.0},
+    {"Project": {"SubjectID": "P01", "Condition": "walking", "BodyMass": 70.0}},
     out_path="output/walking_annotated.h5",
 )
 annotated_trial = annotated.load_data()
-print(annotated_trial.metadata["SubjectID"])
+print(annotated_trial.metadata["Project"]["SubjectID"])
 ```
 
 Assigning values to `trial.metadata` only changes the in-memory dictionary;
 `save_data()` does not persist those edits. Use `modify_metadata()` for file
 attributes.
+
+Updates merge into the specified groups, preserving omitted fields. Both
+`modify_metadata()` and `save_data()` refresh `FileInfo/LastUpdate`.
+Flat update dictionaries are unsupported.
+
+Markers, analogs, EMGs, forces and rigid bodies retain `first_frame`, inclusive
+`last_frame`, and `num_samples`. Markers use source point frame numbers; analogs,
+EMGs and forces use source analog sample numbers. At 100 Hz point / 1000 Hz analog
+rates, marker frame 500 and analog sample 5000 both begin at 5 seconds.
+Supplied timestamps are preserved, including independently shifted clocks.
+Without timestamps, a known rate generates a clock from the source sample origin.
+
+HDF5 stores `StartFrame` and `EndFrame` alongside `NumFrames` for trajectories
+and `NumSamples` for the other signal collections. Force plates also store
+`FrameStep` for downsampled source indices. These attributes are required and
+validated against the datasets; files missing them must be regenerated.
 
 ## Save processed HDF5 data
 
@@ -124,7 +146,7 @@ pelvis = loaded.rigid_bodies["pelvis"]
 
 `RigidBodies` stores a numbered group per body, containing `Position`,
 `Rotation`, UTF-8 `Markers`, and optional `Time`, with `Name`, `NumSamples`,
-`Unit`, and optional `SamplingFrequency` attributes. Each body is loaded and
+`Unit`, `StartFrame`, `EndFrame`, and optional `SamplingFrequency` attributes. Each body is loaded and
 saved with its own data and optional clock. `RPY` is calculated on access.
 
 Cropping affects only the selected collection. Use `body.crop(start, end)` or

@@ -18,8 +18,7 @@ not part of this automated suite.
 
 ## Priority 1 implementation coverage
 
-The implementation gives **167 passed, 1 expected failure**. All priority 1
-regressions now pass. The remaining strict expected failure documents the
+All priority 1 regressions pass. The remaining strict expected failure documents the
 priority 2 subject-filter bug; use `--runxfail` to expose it as a failure.
 
 - `test_priority1_review.py` covers the original review findings: current-format
@@ -31,6 +30,10 @@ priority 2 subject-filter bug; use `--runxfail` to expose it as a failure.
   ownership, force-edit rejection, analog remapping and duplicate labels.
 - Marker arithmetic tests also verify clock/frame preservation needed by cropped
   virtual-marker workflows.
+
+`test_sample_metadata.py` covers nested metadata, C3D parameter preservation,
+subject/dataframe metadata, source sample indices, crops, force downsampling,
+and HDF5/C3D round trips. Flat metadata and missing frame attributes are rejected.
 
 HDF5 uses one fixed layout without version metadata. Tests reject malformed
 arrays, scalar free moments and incompatible layouts. The force

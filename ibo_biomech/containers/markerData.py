@@ -9,6 +9,7 @@ import numpy as np
 from typing import Dict, List, Optional, Any
 from ibo_biomech.utils.utils import *
 from dataclasses import dataclass, field
+from ._validation import validate_sample_range
 
 @dataclass
 class MarkerData:
@@ -25,6 +26,12 @@ class MarkerData:
         unit: Length unit of the positions (e.g. ``"mm"`` or ``"m"``).
         sampling_rate: Sampling frequency in Hz. Required for filtering.
         virtual: ``1`` if the marker was computed/derived, ``0`` if measured.
+        time: Time array, shape ``(n_samples,)``.
+        residuals: Measurement residuals, shape ``(n_samples,)``.
+        sample_types: Original per-frame HDF5 Type codes, shape ``(n_samples,)``.
+        first_frame: Source frame index of the first retained sample.
+        last_frame: Source frame index of the last retained sample.
+        num_samples: Sample count, derived from the trajectory.
     """
     name: str
     x: np.ndarray = field(default_factory=lambda: np.zeros(1))
@@ -37,8 +44,12 @@ class MarkerData:
     residuals: Optional[np.ndarray] = None  # Source measurement residual; NaN = unknown.
     sample_types: Optional[np.ndarray] = None  # Original per-frame HDF5 Type codes.
     first_frame: int = 0  # Source frame index of the first retained sample.
+    last_frame: Optional[int] = None
+    num_samples: Optional[int] = None
 
     def __post_init__(self):
+        self.num_samples, self.last_frame = validate_sample_range(
+            len(self.x), self.first_frame, self.last_frame, self.num_samples, initialize=True)
         if self.time is None and self.sampling_rate is not None:
             self.time = (self.first_frame + np.arange(len(self.x))) / self.sampling_rate
         for name in ('residuals', 'sample_types'):
@@ -56,9 +67,8 @@ class MarkerData:
                 value = np.asarray(value)
                 if value.shape != shape:
                     raise ValueError(f'{name} must have shape {shape}.')
-        if not isinstance(self.first_frame, (int, np.integer)):
-            raise ValueError('first_frame must be an integer.')
-            
+        validate_sample_range(len(self.x), self.first_frame, self.last_frame, self.num_samples)
+        
     def get_trajectory(self) -> np.ndarray:
         """Return the trajectory stacked as a single array.
 
@@ -155,8 +165,10 @@ class MarkerData:
             value = getattr(self, name)
             if value is not None:
                 setattr(self, name, value[..., start_idx:end_idx].copy())
+
+        self.num_samples = len(self.x)
         self.first_frame += start_idx
- 
+        self.last_frame = self.first_frame + self.num_samples - 1
 
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate the trajectory in place about a coordinate axis.

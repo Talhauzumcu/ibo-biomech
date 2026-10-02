@@ -146,22 +146,25 @@ trialdata.attach_ID_results('./example_data/id.sto')
 trialdata.attach_IK_results('./example_data/ik.mot')
 trialdata.parse_EMG_data([1,2,3])
 #%%
-
 rigid_body = RigidBody(name='test_body',markers=['marker1','marker2'],
-                       position = trialdata.markers['STRN'].position, rotation=np.eye(3))
+                       position = trialdata.markers['Head1'].position, rotation=np.eye(3))
 rigid_body_2 = RigidBody(name='test_body2',markers=['marker4','marker4'],
-                          position = trialdata.markers['L_Trochanter'].position, rotation=np.eye(3))
+                          position = trialdata.markers['Head2'].position, rotation=np.eye(3))
 rigid_body_2.rotate('z', 90)
 trialdata.add_rigid_body(rigid_body)
 trialdata.add_rigid_body(rigid_body_2)
 #%%
-event_time = trialdata.markers['STRN'].time_at_frame(123)
-event1 = Event(name='test_event1', frame=123, time=event_time, description='test event 1')
+event_time = trialdata.markers['Head1'].time_at_frame(1000)
+event1 = Event(name='test_event1', frame=1000, time=event_time, description='test event 1')
 trialdata.add_event(event1)
 h5h.save_data(trialdata, 'test_h5_test2.h5')
 # %%
 h5h2 = H5Handler('test_h5_test2.h5')
 trialdata2 = h5h2.load_data()
-h5h2.modify_metadata({'SubjectGroup': 'testgroup'})
+trialdata2.crop('markers', 50, 100)
+trialdata2.crop('forces', 100, 600)
+h5h2.modify_metadata({'Project': {'SubjectGroup': 'testgroup'}})
 h5h2.save_data(trialdata2, 'test_h5_test2_modified.h5')
+# # %%
+
 # %%

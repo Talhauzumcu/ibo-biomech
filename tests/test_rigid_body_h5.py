@@ -12,13 +12,14 @@ from ibo_biomech import H5Handler, RigidBody
 def saved_bodies(tmp_path):
     path = tmp_path / 'bodies.h5'
     with h5py.File(path, 'w') as file:
-        file.create_group('MetaData')
+        for name in ('FileInfo', 'Project', 'Location', 'C3DParameters'):
+            file.require_group('MetaData').create_group(name)
     handler = H5Handler(str(path))
     trial = handler.load_data()
     trial.add_rigid_body(RigidBody('pelvis/左', markers=['LASI', '左骨', 'RASI'],
         position=np.arange(15).reshape(3, 5),
         rotation=Rotation.from_euler('xyz', [10, 20, 30], degrees=True).as_matrix(),
-        sampling_rate=100, time=2 + np.arange(5) / 100, unit='m'))
+        sampling_rate=100, time=2 + np.arange(5) / 100, first_frame=200, unit='m'))
     trial.add_rigid_body(RigidBody('unknown', position=np.full((3, 2), np.nan)))
     handler.save_data(trial, str(path))
     return handler, trial
@@ -30,7 +31,7 @@ def test_round_trip_preserves_all_fields_and_derived_rpy(saved_bodies):
     assert list(actual.rigid_bodies) == list(expected.rigid_bodies)
     for name, body in expected.rigid_bodies.items():
         result = actual.rigid_bodies[name]
-        for field in ('name', 'markers', 'num_samples', 'unit', 'sampling_rate'):
+        for field in ('name', 'markers', 'num_samples', 'first_frame', 'last_frame', 'unit', 'sampling_rate'):
             assert getattr(result, field) == getattr(body, field)
         for field in ('position', 'rotation', 'time', 'RPY'):
             np.testing.assert_equal(getattr(result, field), getattr(body, field))
@@ -128,7 +129,8 @@ def test_invalid_save_leaves_destination_unchanged(saved_bodies, invalid):
 def test_invalid_body_layout_is_rejected(tmp_path):
     path = tmp_path / 'invalid.h5'
     with h5py.File(path, 'w') as file:
-        file.create_group('MetaData')
+        for name in ('FileInfo', 'Project', 'Location', 'C3DParameters'):
+            file.require_group('MetaData').create_group(name)
         file.create_group('RigidBodies').create_dataset('Pose', data=np.eye(4))
     with pytest.raises(ValueError, match='must be body groups'):
         H5Handler(str(path)).load_data()

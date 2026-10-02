@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from ibo_biomech.utils.utils import *
 from ._mixins import ArrayLikeMixin
-from ._validation import validate_clock
+from ._validation import validate_clock, validate_sample_range
 
 @dataclass
 class ForceData(ArrayLikeMixin):
@@ -35,6 +35,9 @@ class ForceData(ArrayLikeMixin):
         metadata: Raw plate metadata (units, calibration matrix, corners, ...).
         sampling_rate: Sampling frequency in Hz. Required for filtering.
         num_samples: Number of samples; derived in :meth:`__post_init__`.
+        first_frame: Source analog sample index of the first retained sample.
+        last_frame: Inclusive source analog sample index of the last sample.
+        frame_step: Source sample spacing; multiplied by each downsampling factor.
         unit_force: Force unit, derived from ``metadata``.
         unit_moment: Moment unit, derived from ``metadata``.
         unit_cop: Centre-of-pressure unit, derived from ``metadata``.
@@ -52,6 +55,10 @@ class ForceData(ArrayLikeMixin):
     metadata: Dict = field(default_factory=dict)
     sampling_rate: Optional[float] = None
     time: Optional[np.ndarray] = None
+    first_frame: int = 0
+    last_frame: Optional[int] = None
+    num_samples: Optional[int] = None
+    frame_step: int = 1
 
     def __post_init__(self):
         """Initialize absent signals at full length and mark unknown geometry NaN.
@@ -63,7 +70,9 @@ class ForceData(ArrayLikeMixin):
         self.force = np.array(self.force, dtype=float, copy=True)
         if self.force.ndim != 2 or self.force.shape[0] != 3 or not self.force.shape[1]:
             raise ValueError('Force array must have shape (3, n_samples), n_samples > 0.')
-        self.num_samples = self.force.shape[1]
+        self.num_samples, self.last_frame = validate_sample_range(
+            self.force.shape[1], self.first_frame, self.last_frame, self.num_samples, self.frame_step,
+            initialize=True)
         self.metadata = dict(self.metadata)
         n = self.num_samples
         for name in ('moment', 'cop', 'Tz'):
@@ -86,7 +95,7 @@ class ForceData(ArrayLikeMixin):
             self.time = np.array(self.time, dtype=float, copy=True)
         elif self.sampling_rate is not None:
             validate_clock(None, n, self.sampling_rate)
-            self.time = np.arange(n) / self.sampling_rate
+            self.time = (self.first_frame / self.frame_step + np.arange(n)) / self.sampling_rate
         self.clean_nan()
         self._parse_metadata()
         self.validate()
@@ -103,6 +112,7 @@ class ForceData(ArrayLikeMixin):
         Supplied orientations must be proper orthonormal rotation matrices.
         """
         n = self.num_samples
+        validate_sample_range(n, self.first_frame, self.last_frame, self.num_samples, self.frame_step)
         for name, shape in [('force', (3, n)), ('moment', (3, n)), ('cop', (3, n)),
                             ('Tz', (3, n)), ('position', (3, n)), ('corners', (3, 4, n)),
                             ('rotation', (3, 3, n)), ('origin', (3, 1))]:
@@ -184,6 +194,8 @@ class ForceData(ArrayLikeMixin):
         self.time = time
         self.sampling_rate = rate / factor if rate is not None else None
         self._update_num_samples()
+        self.frame_step *= int(factor)
+        self.last_frame = self.first_frame + (self.num_samples - 1) * self.frame_step
 
     def crop(self, start_idx: int, end_idx: int) -> None:
         """Crop every sampled array to [start_idx, end_idx)."""
@@ -193,7 +205,9 @@ class ForceData(ArrayLikeMixin):
             setattr(self, name, getattr(self, name)[..., start_idx:end_idx].copy())
         self.time = self.time[start_idx:end_idx].copy() if self.time is not None else None
         self._update_num_samples()
-
+        self.first_frame += start_idx * self.frame_step
+        self.last_frame = self.first_frame + (self.num_samples - 1) * self.frame_step
+        
     def rotate(self, axis: str, angle_deg: float) -> None:
         """Rotate all vectors/geometry in their declared frame; origin stays local."""
         self.validate()
