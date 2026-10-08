@@ -62,12 +62,15 @@ class FileConverter:
             meta.create_group('C3DParameters')
             c3d_group = meta.require_group('C3DParameters')
             for key, val in handler.c3d_data['parameters'].items():
-                c3d_group.create_group(key)
-                for subkey, subval in val.items():
-                    sub_group = c3d_group.require_group(key)
-                    for s_subkey, s_subval in subval.items():
-                        sub_group.require_group(subkey).attrs[s_subkey] = s_subval
-            
+                if isinstance(val, dict) and isinstance(key, str) and key != '':
+                    c3d_group.create_group(key)
+                    for subkey, subval in val.items():
+                        sub_group = c3d_group.require_group(key)
+                        for s_subkey, s_subval in subval.items():
+                            sub_group.require_group(subkey).attrs[s_subkey] = s_subval
+                else:
+                    continue
+
             writer = H5Handler(h5_path)
             writer._validate_trial(trial)
             writer._save_markers(h5f, trial)

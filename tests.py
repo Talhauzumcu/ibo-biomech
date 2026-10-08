@@ -165,6 +165,7 @@ trialdata2.crop('markers', 50, 100)
 trialdata2.crop('forces', 100, 600)
 h5h2.modify_metadata({'Project': {'SubjectGroup': 'testgroup'}})
 h5h2.save_data(trialdata2, 'test_h5_test2_modified.h5')
-# # %%
+#%%
+FileConverter.c3d_to_h5('./example_data/test2.c3d', './example_data/test2.h5')
 
 # %%
