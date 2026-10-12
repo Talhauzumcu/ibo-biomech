@@ -104,7 +104,6 @@ class MotResults:
         num_samples = len(self.time)
         with open(filepath, 'w') as f:
             # Header
-            f.write("Coordinates\n")
             f.write("version=1\n")
             f.write(f"nRows={num_samples}\n")
             f.write(f"nColumns={num_columns}\n")

@@ -17,6 +17,7 @@ from .analogData import AnalogData
 from .emgData import EMGData
 from .IKResults import IKResults
 from .IDResults import IDResults
+from .motResults import MotResults
 import pandas as pd
 
 @dataclass
@@ -34,6 +35,8 @@ class TrialData:
         rigid_bodies: Mapping of body name to :class:`RigidBody`.
         events: Ordered list of :class:`Event`; names may repeat.
         emgs: Mapping of channel name to :class:`EMGData`.
+        opensim_results: Mapping of result name to :class:`MotResults`, saved
+            under ``OpenSim/<name>`` in HDF5 files.
         metadata: Nested FileInfo, Project, Location and C3DParameters metadata.
         marker_labels: Cached list of marker labels (set in ``__post_init__``).
         analog_labels: Cached list of analog labels (set in ``__post_init__``).
@@ -48,6 +51,7 @@ class TrialData:
     metadata: Dict = field(default_factory=dict)
     ik_results: Optional[IKResults] = None
     id_results: Optional[IDResults] = None
+    opensim_results: Dict[str, MotResults] = field(default_factory=dict)
     rigid_bodies: Dict[str, RigidBody] = field(default_factory=dict)
     events: List[Event] = field(default_factory=list)
 
@@ -119,6 +123,17 @@ class TrialData:
                 id_results_file: Path to the ID results file.
             """
             self.id_results = IDResults(filepath=idresults_file)
+
+    def attach_opensim_results(self, name: str='', filepath: str = None) -> None:
+        """Attach OpenSim results to the trial.
+
+        Args:
+            name: Name to identify the results (e.g., 'IK', 'ID').
+            filepath: Path to the .mot results file.
+        """
+        if not filepath or not os.path.isfile(filepath):
+            raise ValueError(f"Invalid or missing .mot/sto file: {filepath}")
+        self.opensim_results[name] = MotResults(name=name, filepath=filepath)
 
     def rotate_markers(self, axis: str, angle_deg: float) -> None:
         """Rotate every marker about an axis in place.

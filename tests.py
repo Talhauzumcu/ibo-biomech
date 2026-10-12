@@ -144,6 +144,7 @@ h5h = H5Handler('./example_data/test_h5_events.h5')
 trialdata = h5h.load_data()
 trialdata.attach_ID_results('./example_data/id.sto')
 trialdata.attach_IK_results('./example_data/ik.mot')
+trialdata.attach_opensim_results(name='body_kinematics_acc',filepath ='./example_data/body_kinematics.sto')
 trialdata.parse_EMG_data([1,2,3])
 #%%
 rigid_body = RigidBody(name='test_body',markers=['marker1','marker2'],
@@ -172,3 +173,16 @@ FileConverter.c3d_to_h5('./example_data/test2.c3d', './example_data/test2.h5')
 h5h = H5Handler('test_h5_test2.h5')
 trialdata = h5h.load_data()
 # %%
+from ibo_biomech import H5Handler, C3DHandler, RigidBody,FileConverter, Event
+import numpy as np
+h5h = H5Handler('./example_data/test_h5_events.h5')
+trialdata = h5h.load_data()
+trialdata.attach_opensim_results(name='body_kinematics_acc',filepath ='./example_data/body_kinematics.sto')
+for key, value in trialdata.opensim_results['body_kinematics_acc'].data.items():
+    print(value)
+trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].plot()
+trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].lowpass_filter(5) #you can also lowpass filter all data by calling trialdata.opensim_results['body_kinematics_acc'].lowpass_filter(5)
+trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].plot()
+trialdata.opensim_results['body_kinematics_acc'].crop(50,100)
+trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].plot()
+h5h.save_data(trialdata, 'pelvis_Y_filtered.h5')

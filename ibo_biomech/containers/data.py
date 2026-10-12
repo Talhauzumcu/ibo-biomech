@@ -104,6 +104,8 @@ class Data(ArrayLikeMixin):
     def _is_uniformly_sampled(self, time: np.ndarray) -> bool:
         """Check if the time vector is uniformly sampled."""
         dt = np.diff(time)
+        if not len(dt):
+            return False
         return np.allclose(dt, dt[0], atol=1e-6)
     
     def __repr__(self) -> str:

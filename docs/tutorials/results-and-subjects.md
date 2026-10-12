@@ -78,6 +78,41 @@ particularly when a result mixes forces, moments, and normalized values. The
 container-level unit initialized from `inDegrees` does not describe those
 quantities.
 
+## Store named OpenSim results in HDF5
+
+Attach any `.mot` or `.sto` results using a nonempty name:
+
+```python
+from ibo_biomech import H5Handler
+
+handler = H5Handler("walking.h5")
+trial = handler.load_data()
+trial.add_opensim_results("joint_states", "walking_IK.mot")
+trial.add_opensim_results("joint_forces", "walking_ID.sto")
+trial.opensim_results["joint_forces"]["hip_flexion_r_moment"].unit = "Nm"
+handler.save_data(trial, "walking_with_results.h5")
+
+restored = H5Handler("walking_with_results.h5").load_data()
+forces = restored.opensim_results["joint_forces"]
+forces.crop(10, 100)
+```
+
+Each dictionary key identifies a group at `OpenSim/<name>` and becomes the
+loaded `MotResults.name`. Names cannot contain `/`. Results retain their own
+time vectors; attaching or saving them does not align them to marker samples.
+Each group uses the same `Data`, `Time`, `Labels`, `NumSamples`, and `Metadata`
+layout as IK/ID results, with time in the first `Data` row and first label.
+`Unit` and `ColumnUnits` attributes preserve the container unit and individual
+column units explicitly. `ColumnUnits` follows the signal labels, excluding
+`time`. Set physical units on columns before saving when the source file does
+not specify them.
+
+Saving replaces the named result collection, including removed results and
+columns. Use `load_data(load_opensim_results=False)` to skip loading this
+collection and preserve its stored contents during subsequent saves.
+An HDF5 file without `OpenSim` loads with an empty result dictionary.
+The separate `trial.ik_results` and `trial.id_results` remain available.
+
 ## Normalize a selected interval
 
 `time_normalize()` linearly interpolates a one-dimensional, equally spaced

@@ -11,6 +11,7 @@ import numpy as np
 
 from ibo_biomech.containers import AnalogData, ForceData, MarkerData, EMGData, TrialData, Subject, IKResults, IDResults, Data
 from ibo_biomech.containers import RigidBody, Event
+from ibo_biomech.containers.motResults import MotResults
 from ibo_biomech.containers._validation import collection_clock
 from ._force_schema import read_plate, write_plate
 
@@ -56,7 +57,8 @@ class H5Handler:
                   load_ik_results: bool = True,
                   load_id_results: bool = True,
                   load_rigid_bodies: bool = True,
-                  load_events: bool = True ) -> TrialData:
+                  load_events: bool = True,
+                  load_opensim_results: bool = True ) -> TrialData:
         """Read the HDF5 file and return a fully populated trial. Accepts flags to selectively load specific data types for faster loading times
 
         Args:
@@ -68,6 +70,7 @@ class H5Handler:
             load_id_results: Whether to load inverse dynamics results.
             load_rigid_bodies: Whether to load rigid-body poses and marker names.
             load_events: Whether to load named events, including repeated names.
+            load_opensim_results: Whether to load named OpenSim results.
         Returns:
             A :class:`~ibo_biomech.containers.TrialData` with markers, analogs,
             forces, rigid bodies, events and metadata.
@@ -82,6 +85,7 @@ class H5Handler:
             emgs = self._load_emgs(h5f) if load_emgs else {}
             ik_results = self._load_ik_results(h5f) if load_ik_results else None
             id_results = self._load_id_results(h5f) if load_id_results else None
+            opensim_results = self._load_opensim_results(h5f) if load_opensim_results else {}
             metadata = self._load_metadata(h5f)
 
         trial = TrialData(
@@ -94,13 +98,15 @@ class H5Handler:
             emgs=emgs,
             ik_results=ik_results,
             id_results=id_results,
+            opensim_results=opensim_results,
             metadata=metadata,
         )
 
         trial._unloaded_collections = {name for name, loaded in (
             ('markers', load_markers), ('analogs', load_analogs), ('forces', load_forces),
             ('emgs', load_emgs), ('ik_results', load_ik_results), ('id_results', load_id_results),
-            ('rigid_bodies', load_rigid_bodies), ('events', load_events)) if not loaded}
+            ('rigid_bodies', load_rigid_bodies), ('events', load_events),
+            ('opensim_results', load_opensim_results)) if not loaded}
         return trial
 
     def load_subject_data(self) -> Subject:
@@ -213,6 +219,30 @@ class H5Handler:
                 for column in result.data.values():
                     if len(column.data) != len(result.time):
                         raise ValueError(f'{name}: column lengths must match the result clock.')
+        if 'opensim_results' not in skipped:
+            for name, result in trial.opensim_results.items():
+                if (not isinstance(name, str) or not name or name in ('.', '..') or
+                        '/' in name or '\x00' in name):
+                    raise ValueError('OpenSim result names must be nonempty HDF5 group names '
+                                     'without slashes or null characters.')
+                if not isinstance(result, MotResults):
+                    raise ValueError(f'OpenSim/{name}: results must be MotResults instances.')
+                time = np.asarray(result.time)
+                if time.ndim != 1:
+                    raise ValueError(f'OpenSim/{name}: time must be a one-dimensional array.')
+                if not isinstance(result.unit, str):
+                    raise ValueError(f'OpenSim/{name}: unit must be a string.')
+                for label, column in result.data.items():
+                    if not isinstance(label, str) or not label or label == 'time':
+                        raise ValueError(f'OpenSim/{name}: column labels must be nonempty '
+                                         'strings other than time.')
+                    if not isinstance(column, Data) or np.asarray(column.data).shape != time.shape:
+                        raise ValueError(f'OpenSim/{name}: columns must be one-dimensional Data '
+                                         'signals matching the result clock.')
+                    if column.time is not None and not np.array_equal(column.time, time):
+                        raise ValueError(f'OpenSim/{name}: column clocks must match the result clock.')
+                    if not isinstance(column.unit, str):
+                        raise ValueError(f'OpenSim/{name}: column units must be strings.')
 
     def _atomic_update(self, out_path, update):
         destination = Path(out_path)
@@ -239,7 +269,8 @@ class H5Handler:
         self._validate_trial(trial)
         skipped = getattr(trial, '_unloaded_collections', set())
         def update(h5f):
-            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results', 'rigid_bodies'):
+            for name in ('markers', 'analogs', 'forces', 'emgs', 'ik_results', 'id_results',
+                         'rigid_bodies', 'opensim_results'):
                 if name not in skipped:
                     getattr(self, f'_save_{name}')(h5f, trial)
             if 'Trajectories/Labeled' in h5f:
@@ -409,6 +440,23 @@ class H5Handler:
                 target = group.create_group(str(key))
             write_plate(target, plate)
 
+    def _save_opensim_results(self, h5f: h5py.File, trial: TrialData) -> None:
+        """Replace named results using the IK/ID layout plus explicit units."""
+        if 'OpenSim' in h5f:
+            del h5f['OpenSim']
+        collection = h5f.create_group('OpenSim', track_order=True)
+        for name, result in trial.opensim_results.items():
+            group = collection.create_group(name)
+            labels = list(result.data)
+            time = np.asarray(result.time)
+            data = np.vstack([time] + [column.data for column in result.data.values()])
+            self._replace_dataset(group, 'Data', data)
+            self._replace_dataset(group, 'Time', time)
+            group.attrs.update(Labels=['time'] + labels, NumSamples=len(time),
+                               Metadata=str(result.metadata), Unit=result.unit)
+            group.attrs.create('ColumnUnits', [result.data[label].unit for label in labels],
+                               dtype=h5py.string_dtype('utf-8'))
+
     def _load_markers(self, h5f: h5py.File) -> Dict[str, MarkerData]:
         if 'Trajectories/Labeled' not in h5f:
             return {}
@@ -534,6 +582,29 @@ class H5Handler:
                 raise ValueError(f'Duplicate force plate name: {plate.name}')
             plates[plate.name] = plate
         return plates
+
+    def _load_opensim_results(self, h5f: h5py.File) -> Dict[str, MotResults]:
+        """Load each OpenSim subgroup as a MotResults container."""
+        import ast
+        results = {}
+        for name, group in h5f.get('OpenSim', {}).items():
+            if (not isinstance(group, h5py.Group) or not {'Data', 'Time'} <= set(group) or
+                    not {'Labels', 'NumSamples', 'Metadata', 'Unit', 'ColumnUnits'} <= set(group.attrs)):
+                raise ValueError(f'OpenSim/{name}: missing result datasets or attributes.')
+            labels = self._decode_labels(group.attrs['Labels'])
+            units = self._decode_labels(group.attrs['ColumnUnits'])
+            time, data = group['Time'][:], group['Data'][:]
+            if (not labels or labels[0] != 'time' or len(set(labels)) != len(labels) or
+                    time.ndim != 1 or data.shape != (len(labels), len(time)) or
+                    group.attrs['NumSamples'] != len(time) or len(units) != len(labels) - 1 or
+                    not np.array_equal(data[0], time, equal_nan=True)):
+                raise ValueError(f'OpenSim/{name}: labels, units, samples and clocks must match.')
+            metadata = ast.literal_eval(group.attrs['Metadata'])
+            columns = {label: Data(name=label, data=data[i], unit=units[i - 1], time=time)
+                       for i, label in enumerate(labels[1:], start=1)}
+            results[name] = MotResults(name=name, data=columns, time=time, metadata=metadata,
+                                       unit=group.attrs['Unit'])
+        return results
 
     def _save_rigid_bodies(self, h5f: h5py.File, trial: TrialData) -> None:
         """Write each supplied body without changing its samples or clock."""
