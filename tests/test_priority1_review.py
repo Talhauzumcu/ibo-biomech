@@ -159,7 +159,7 @@ def test_marker_metadata_after_crop_and_add(converted_h5, tmp_path, field):
     trial = handler.load_data()
     trial.crop('markers', 5, 15)
     extra = deepcopy(trial.markers['Marker'])
-    extra.name, extra.virtual = 'Virtual', 1
+    extra.name, extra.virtual = 'Virtual', True
     trial.add_marker(extra)
     path = tmp_path / 'cropped.h5'
     handler.save_data(trial, str(path))
@@ -173,7 +173,7 @@ def test_marker_metadata_after_crop_and_add(converted_h5, tmp_path, field):
         elif field == 'residuals':
             assert group['Residuals'].shape[-1] == 10
         else:
-            assert H5Handler(str(path)).load_data().markers['Virtual'].virtual == 1
+            assert H5Handler(str(path)).load_data().markers['Virtual'].virtual is True
 
 
 @pytest.mark.parametrize('axis,angle', [('x', -90), ('x', 0), ('z', 90)])

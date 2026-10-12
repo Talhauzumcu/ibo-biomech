@@ -3,6 +3,18 @@ import pytest
 from ibo_biomech.containers import MarkerData
 
 
+def test_virtual_defaults_to_false(marker_data):
+    assert marker_data.virtual is False
+
+
+@pytest.mark.parametrize('virtual', [False, True, np.bool_(False), np.bool_(True)])
+def test_virtual_is_python_bool(marker_kwargs, virtual):
+    marker = MarkerData(**marker_kwargs, virtual=virtual)
+    assert marker.virtual is bool(virtual)
+    marker.crop(10, 30)
+    assert marker.virtual is bool(virtual)
+
+
 def test_trajectory_shape(marker_data):
     traj = marker_data.get_trajectory()
     assert traj.shape == (3, len(marker_data.x))
@@ -91,7 +103,7 @@ def test_add_produces_virtual_marker(marker_data):
     other = MarkerData(name="L_Knee", x=marker_data.x.copy(), y=marker_data.y.copy(),
                         z=marker_data.z.copy(), sampling_rate=marker_data.sampling_rate)
     combined = marker_data + other
-    assert combined.virtual == 1
+    assert combined.virtual is True
     assert combined.name == f"{marker_data.name}_plus_{other.name}"
     assert np.allclose(combined.x, marker_data.x + other.x)
 
@@ -104,7 +116,7 @@ def test_add_shape_mismatch_raises(marker_data):
 
 def test_truediv_by_scalar_produces_virtual_marker(marker_data):
     halved = marker_data / 2
-    assert halved.virtual == 1
+    assert halved.virtual is True
     assert np.allclose(halved.x, marker_data.x / 2)
 
 
@@ -120,7 +132,7 @@ def test_midpoint_pattern_matches_readme_example(marker_data):
                         z=marker_data.z.copy(), sampling_rate=marker_data.sampling_rate)
     mid = (marker_data + other) / 2
     assert np.allclose(mid.x, marker_data.x)  # identical inputs -> midpoint == either input
-    assert mid.virtual == 1
+    assert mid.virtual is True
 
 
 def test_add_preserves_offset_time(marker_data):

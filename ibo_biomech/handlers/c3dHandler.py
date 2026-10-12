@@ -115,7 +115,7 @@ class C3DHandler:
                     time=(first_frame + np.arange(points.shape[-1])) / point_rate,
                     first_frame=first_frame,
                     residuals=meta['residuals'][0, i].copy() if 'residuals' in meta else None,
-                    virtual=int(virtual[i]) if i < len(virtual) else 0
+                    virtual=bool(virtual[i]) if i < len(virtual) else False
                 )
                 
                 self.markers[label.strip()] = marker

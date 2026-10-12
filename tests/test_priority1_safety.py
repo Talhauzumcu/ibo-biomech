@@ -132,7 +132,6 @@ def test_marker_measurement_metadata_survives_crop_twice(converted_h5, tmp_path)
     marker = trial.markers['Marker']
     marker.residuals = np.arange(20, dtype=float)
     marker.residuals[8] = -1.
-    marker.sample_types = np.arange(20)
     marker.crop(5, 15)
     for index in range(2):
         path = tmp_path / f'measurements_{index}.h5'
@@ -142,7 +141,7 @@ def test_marker_measurement_metadata_survives_crop_twice(converted_h5, tmp_path)
         actual = trial.markers['Marker']
         assert actual.first_frame == 5
         np.testing.assert_array_equal(actual.residuals, marker.residuals)
-        np.testing.assert_array_equal(actual.sample_types, marker.sample_types)
+        assert actual.virtual is False
         with h5py.File(path) as saved:
             assert 'CameraMasks' not in saved['Trajectories/Labeled']
             assert 'CameraMasksKnown' not in saved['Trajectories/Labeled']
@@ -159,10 +158,14 @@ def test_virtual_midpoint_after_crop_keeps_frame_and_clock(converted_h5, tmp_pat
     path = tmp_path / 'midpoint.h5'
     handler.save_data(trial, str(path))
     actual = H5Handler(str(path)).load_data().markers['Midpoint']
-    assert actual.first_frame == 5 and actual.virtual == 1
+    assert actual.first_frame == 5 and actual.virtual is True
     np.testing.assert_array_equal(actual.time, marker.time)
     assert np.isnan(actual.residuals).all()
-    np.testing.assert_array_equal(actual.sample_types, np.full(10, 2))
+    with h5py.File(path) as saved:
+        group = saved['Trajectories/Labeled']
+        assert 'Type' not in group
+        assert group['Virtual'].dtype == np.dtype(bool)
+        np.testing.assert_array_equal(group['Virtual'][:], [False, True])
 
 
 def test_explicitly_cropped_bodies_and_in_range_events_are_saved(converted_h5):

@@ -22,6 +22,7 @@ class H5Handler:
     Writing validates the trial and atomically replaces loaded collections.
     The dataset layout is fixed. Each signal collection is saved as supplied;
     events outside the saved marker frame range are discarded.
+    Labeled trajectories store one boolean Virtual flag per marker.
 
     Metadata uses the nested FileInfo, Project, Location and C3DParameters
     groups. Use ``modify_metadata({'Project': {'SubjectID': 'P01'}})`` to
@@ -243,7 +244,7 @@ class H5Handler:
                     getattr(self, f'_save_{name}')(h5f, trial)
             if 'Trajectories/Labeled' in h5f:
                 labeled = h5f['Trajectories/Labeled']
-                for name in ('CameraMasks', 'CameraMasksKnown'):
+                for name in ('CameraMasks', 'CameraMasksKnown', 'Type'):
                     if name in labeled:
                         del labeled[name]
             self._save_events(h5f, trial)
@@ -277,18 +278,15 @@ class H5Handler:
             unit, start = markers[0].unit, markers[0].first_frame
             self._validate_marker_units(trial.markers, unit)
             data = np.stack([marker.get_frame_trajectory() for marker in markers])
-            types = np.stack([np.full(n, 2) if marker.virtual else
-                              marker.sample_types if marker.sample_types is not None
-                              else np.ones(n, dtype=np.int8) for marker in markers])
             residuals = np.stack([marker.residuals if marker.residuals is not None
                                   else np.full(n, np.nan) for marker in markers])
         else:
             n, time, rate, unit, start = 0, None, None, '', 0
-            data, types = np.empty((0, 4, 0)), np.empty((0, 0), dtype=np.int8)
+            data = np.empty((0, 4, 0))
             residuals = np.empty((0, 0))
-        for name, value in [('Data', data), ('Type', types), ('Time', time),
+        for name, value in [('Data', data), ('Time', time),
                             ('Residuals', residuals),
-                            ('Virtual', np.array([bool(m.virtual) for m in markers]))]:
+                            ('Virtual', np.array([m.virtual for m in markers], dtype=bool))]:
             self._replace_dataset(labeled, name, value)
         labeled.attrs.update(Labels=list(trial.markers), Unit=unit, NumLabeled=len(markers),
                              ResidualStatus='NaN means unavailable; negative means invalid')
@@ -426,16 +424,18 @@ class H5Handler:
         residuals = group['Residuals'][:] if 'Residuals' in group else None
         if residuals is not None and residuals.shape != (len(labels), data.shape[-1]):
             raise ValueError('Residuals do not match marker/frame counts.')
-        types = group['Type'][:] if 'Type' in group else None
-        virtual = group['Virtual'][:] if 'Virtual' in group else np.zeros(len(labels), dtype=bool)
+        if 'Virtual' not in group:
+            raise ValueError('Labeled trajectories require a Virtual flag per marker.')
+        virtual = group['Virtual'][:]
+        if virtual.shape != (len(labels),) or virtual.dtype.kind != 'b':
+            raise ValueError('Virtual must be a boolean array with one flag per marker.')
         result = {}
         for i, label in enumerate(labels):
             result[label] = MarkerData(name=label, x=data[i, 0], y=data[i, 1], z=data[i, 2],
                 unit=group.attrs.get('Unit', 'mm'), sampling_rate=traj.attrs.get('SamplingFrequency'),
                 time=time, first_frame=traj.attrs['StartFrame'], last_frame=traj.attrs['EndFrame'],
-                num_samples=traj.attrs['NumFrames'], virtual=int(virtual[i]),
-                residuals=residuals[i] if residuals is not None else None,
-                sample_types=types[i] if types is not None else None)
+                num_samples=traj.attrs['NumFrames'], virtual=bool(virtual[i]),
+                residuals=residuals[i] if residuals is not None else None)
         return result
 
     def _load_channels(self, h5f, name, cls):

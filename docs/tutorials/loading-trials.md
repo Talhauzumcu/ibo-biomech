@@ -127,8 +127,9 @@ for name, plate in source_trial.forces.items():
 Saving validates shared clocks, units and array shapes before replacing the
 destination atomically; same-path saves are supported. Loaded marker, analog,
 EMG, force and rigid-body collections replace their stored counterparts,
-including channel removals. Marker residuals, per-frame type codes, virtual
-status and source frame offsets are preserved/cropped.
+including channel removals. Marker residuals and source frame offsets are
+preserved/cropped. Virtual status is stored in `Trajectories/Labeled/Virtual`
+as one boolean per marker; there is no per-frame `Type` dataset.
 Analog/EMG units and channel identifiers are retained.
 
 Rigid bodies in `trial.rigid_bodies` are saved and loaded automatically:

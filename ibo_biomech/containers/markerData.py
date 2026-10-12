@@ -25,10 +25,9 @@ class MarkerData:
         z: Position along the Z axis, shape ``(n_samples,)``.
         unit: Length unit of the positions (e.g. ``"mm"`` or ``"m"``).
         sampling_rate: Sampling frequency in Hz. Required for filtering.
-        virtual: ``1`` if the marker was computed/derived, ``0`` if measured.
+        virtual: ``True`` if the marker was computed/derived, ``False`` if measured.
         time: Time array, shape ``(n_samples,)``.
         residuals: Measurement residuals, shape ``(n_samples,)``.
-        sample_types: Original per-frame HDF5 Type codes, shape ``(n_samples,)``.
         first_frame: Source frame index of the first retained sample.
         last_frame: Source frame index of the last retained sample.
         num_samples: Sample count, derived from the trajectory.
@@ -40,33 +39,28 @@ class MarkerData:
     unit: str = 'mm'
     sampling_rate: float = None
     time: Optional[np.ndarray] = None
-    virtual: int = 0 #Whether the marker is virtual or measured.
+    virtual: bool = False  # Whether the marker is virtual or measured.
     residuals: Optional[np.ndarray] = None  # Source measurement residual; NaN = unknown.
-    sample_types: Optional[np.ndarray] = None  # Original per-frame HDF5 Type codes.
     first_frame: int = 0  # Source frame index of the first retained sample.
     last_frame: Optional[int] = None
     num_samples: Optional[int] = None
 
     def __post_init__(self):
+        self.virtual = bool(self.virtual)
         self.num_samples, self.last_frame = validate_sample_range(
             len(self.x), self.first_frame, self.last_frame, self.num_samples, initialize=True)
         if self.time is None and self.sampling_rate is not None:
             self.time = (self.first_frame + np.arange(len(self.x))) / self.sampling_rate
-        for name in ('residuals', 'sample_types'):
-            value = getattr(self, name)
-            if value is not None:
-                setattr(self, name, np.array(value, copy=True))
+        if self.residuals is not None:
+            self.residuals = np.array(self.residuals, copy=True)
         self.validate_sample_metadata()
 
     def validate_sample_metadata(self):
         """Check optional measurement metadata without inventing validity."""
-        for name, shape in [('residuals', (len(self.x),)),
-                            ('sample_types', (len(self.x),))]:
-            value = getattr(self, name)
-            if value is not None:
-                value = np.asarray(value)
-                if value.shape != shape:
-                    raise ValueError(f'{name} must have shape {shape}.')
+        if self.residuals is not None:
+            shape = (len(self.x),)
+            if np.asarray(self.residuals).shape != shape:
+                raise ValueError(f'residuals must have shape {shape}.')
         validate_sample_range(len(self.x), self.first_frame, self.last_frame, self.num_samples)
         
     def get_trajectory(self) -> np.ndarray:
@@ -161,10 +155,8 @@ class MarkerData:
         self.y=self.y[start_idx:end_idx]
         self.z=self.z[start_idx:end_idx]
         self.time = self.time[start_idx:end_idx] if self.time is not None else None
-        for name in ('residuals', 'sample_types'):
-            value = getattr(self, name)
-            if value is not None:
-                setattr(self, name, value[..., start_idx:end_idx].copy())
+        if self.residuals is not None:
+            self.residuals = self.residuals[start_idx:end_idx].copy()
 
         self.num_samples = len(self.x)
         self.first_frame += start_idx
@@ -249,7 +241,7 @@ class MarkerData:
             other: The marker to add. Must have the same number of samples.
 
         Returns:
-            A new :class:`MarkerData` with ``virtual=1``.
+            A new :class:`MarkerData` with ``virtual=True``.
 
         Raises:
             ValueError: If the two markers have different shapes.
@@ -274,7 +266,7 @@ class MarkerData:
             sampling_rate=self.sampling_rate,
             time=self.time.copy() if self.time is not None else None,
             first_frame=self.first_frame,
-            virtual = 1,
+            virtual=True,
             unit=self.unit
         )
 
@@ -286,7 +278,7 @@ class MarkerData:
                 scalar.
 
         Returns:
-            A new :class:`MarkerData` with ``virtual=1``, or ``NotImplemented``
+            A new :class:`MarkerData` with ``virtual=True``, or ``NotImplemented``
             if ``other`` is an unsupported type.
 
         Raises:
@@ -310,7 +302,7 @@ class MarkerData:
                 sampling_rate=self.sampling_rate,
                 time=self.time.copy() if self.time is not None else None,
                 first_frame=self.first_frame,
-                virtual=1,
+                virtual=True,
                 unit=self.unit
             )
         elif isinstance(other, (float, int)):
@@ -324,7 +316,7 @@ class MarkerData:
                 sampling_rate=self.sampling_rate,
                 time=self.time.copy() if self.time is not None else None,
                 first_frame=self.first_frame,
-                virtual=1,
+                virtual=True,
                 unit=self.unit
             )
         return NotImplemented

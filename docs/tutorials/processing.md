@@ -54,7 +54,7 @@ mid = MarkerData(
     sampling_rate=right.sampling_rate,
     time=right.time.copy(),
     first_frame=right.first_frame,
-    virtual=1,
+    virtual=True,
 )
 trial.add_marker(mid)
 ```
