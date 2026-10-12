@@ -375,7 +375,8 @@ class H5Handler:
         sample_id = next(iter(trial.id_results.data.values()))
         n_samples = len(sample_id.data)
         time = sample_id.time
-        
+        metadata = trial.id_results.metadata
+
         data = np.zeros((len(ordered), n_samples), dtype=np.float64)
         data[0] = time  # First row is time
         for i, label in enumerate(ordered[1:], start=1):  # Start from index 1 to skip time
@@ -390,7 +391,7 @@ class H5Handler:
         id_group.create_dataset("Time", data=time, compression="gzip") if time is not None else None
         id_group.attrs["Labels"] = ordered
         id_group.attrs["NumSamples"] = n_samples
-        id_group.attrs["Metadata"] = str(sample_id.metadata)  # Store metadata as a string representation
+        id_group.attrs["Metadata"] = str(metadata)  # Store metadata as a string representation
 
     def _save_forces(self, h5f: h5py.File, trial: TrialData) -> None:
         group = h5f.require_group('ForcePlates')

@@ -169,3 +169,6 @@ h5h2.save_data(trialdata2, 'test_h5_test2_modified.h5')
 FileConverter.c3d_to_h5('./example_data/test2.c3d', './example_data/test2.h5')
 
 # %%
+h5h = H5Handler('test_h5_test2.h5')
+trialdata = h5h.load_data()
+# %%

@@ -44,7 +44,10 @@ class MotResults:
         mot_data = read_mot(filepath)
         self.time = mot_data['time']
         self.metadata = mot_data.get('metadata', {})
-        self.unit = 'deg' if self.metadata.get('inDegrees') == 'yes' else 'rad'
+        if self.metadata.get('inDegrees', None) is None:
+            self.unit = "Unknown"
+        else:
+            self.unit = 'deg' if self.metadata.get('inDegrees') == 'yes' else 'rad'
         self.columns = [key for key in mot_data.keys() if (key != 'time' and key != 'metadata')]
         for column in self.columns:
             self.data[column] = Data(name=column,
