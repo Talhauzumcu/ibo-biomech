@@ -94,6 +94,13 @@ class TrialData:
         event.validate()
         self.events.append(event)
 
+    def delete_event(self, event: Event) -> None:
+            """Delete an event from the trial."""
+            if not isinstance(event, Event):
+                raise TypeError('event must be an Event instance.')
+            event.validate()
+            self.events.remove(event)
+
     def get_events(self, name: Optional[str] = None) -> List[Event]:
         """Return all events, or every event with the given name."""
         return [event for event in self.events if name is None or event.name == name]
@@ -309,6 +316,30 @@ class TrialData:
         self.markers[marker_data.name] = marker_data
         self.marker_labels = list(self.markers.keys())  # Update cached marker labels
 
+    def remove_marker(self, marker_name: str) -> None:
+        """Remove a marker from the trial.
+
+        Args:
+            marker_name: Name of the marker to remove.
+        """
+        if marker_name in self.markers:
+            del self.markers[marker_name]
+            self.marker_labels = list(self.markers.keys())  # Update cached marker labels
+        else:
+            print(f"[WARNING]: Marker {marker_name} not found in trial.")
+            
+    def delete_marker(self, marker_name: str) -> None:
+        """Delete a marker from the trial.
+
+        Args:
+            marker_name: Name of the marker to delete.
+        """
+        if marker_name in self.markers:
+            del self.markers[marker_name]
+            self.marker_labels = list(self.markers.keys())  # Update cached marker labels
+        else:
+            print(f"[WARNING]: Marker {marker_name} not found in trial.")
+
     def add_force(self, force_data: ForceData) -> None:
         """Add (or replace) a force plate, keyed by its name.
 
@@ -318,6 +349,17 @@ class TrialData:
         if force_data.sampling_rate != self.force_rate and self.force_rate is not None:
             print(f"[WARNING]: Force sampling rate {force_data.sampling_rate} for force plate {force_data.name} does not match trial force rate {self.force_rate}.")
         self.forces[force_data.name] = force_data
+
+    def remove_force(self, force_name: str) -> None:
+        """Remove a force plate from the trial.
+
+        Args:
+            force_name: Name of the force plate to remove.
+        """
+        if force_name in self.forces:
+            del self.forces[force_name]
+        else:
+            print(f"[WARNING]: Force plate {force_name} not found in trial.")
 
     def add_analog(self, analog_data: AnalogData) -> None:
         """Add (or replace) an analog channel, keyed by its name.
@@ -330,6 +372,18 @@ class TrialData:
         self.analogs[analog_data.name] = analog_data
         self.analog_labels = list(self.analogs.keys())  # Update cached analog labels
 
+    def remove_analog(self, analog_name: str) -> None:
+        """Remove an analog channel from the trial.
+
+        Args:
+            analog_name: Name of the analog channel to remove.
+        """
+        if analog_name in self.analogs:
+            del self.analogs[analog_name]
+            self.analog_labels = list(self.analogs.keys())  # Update cached analog labels
+        else:
+            print(f"[WARNING]: Analog channel {analog_name} not found in trial.")
+
     def add_rigid_body(self, rigid_body: RigidBody) -> None:
         """Add (or replace) a rigid body, keyed by its name."""
         if rigid_body.sampling_rate != self.rigid_body_rate and self.rigid_body_rate is not None:
@@ -337,6 +391,17 @@ class TrialData:
         self.rigid_bodies[rigid_body.name] = rigid_body
         self.rigid_body_rate = next(iter(self.rigid_bodies.values())).sampling_rate
         
+    def remove_rigid_body(self, rigid_body_name: str) -> None:
+            """Remove a rigid body from the trial.
+    
+            Args:
+                rigid_body_name: Name of the rigid body to remove.
+            """
+            if rigid_body_name in self.rigid_bodies:
+                del self.rigid_bodies[rigid_body_name]
+            else:
+                print(f"[WARNING]: Rigid body {rigid_body_name} not found in trial.")
+    
     def add_emg(self, emg_data: EMGData) -> None:
         """Add (or replace) an EMG channel, keyed by its name.
 
@@ -344,6 +409,17 @@ class TrialData:
             emg_data: The EMG channel to store.
         """
         self.emgs[emg_data.name] = emg_data
+
+    def remove_emg(self, emg_name: str) -> None:
+        """Remove an EMG channel from the trial.
+
+        Args:
+            emg_name: Name of the EMG channel to remove.
+        """
+        if emg_name in self.emgs:
+            del self.emgs[emg_name]
+        else:
+            print(f"[WARNING]: EMG channel {emg_name} not found in trial.")
 
     def as_df(self, data_dict: Dict[str, Any], time_normalize=False) -> pd.DataFrame:
         """Convert a dictionary of data objects to a pandas DataFrame. Columns will also include

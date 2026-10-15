@@ -18,6 +18,9 @@ recordings, models, and setup files; their paths and labels are placeholders.
 The package is in alpha. Each tutorial describes the inputs and coordinate
 assumptions required for its workflow.
 
+The [HDF5 architecture LaTeX source](hdf5-structure.tex) preserves the original
+format proposal and documents the current groups, fields, and differences.
+
 ```{toctree}
 :caption: Tutorials
 :maxdepth: 1

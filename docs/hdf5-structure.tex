@@ -1,0 +1,379 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{dirtree}
+\usepackage[left=2cm,right=2cm,bottom=2cm,top=2cm]{geometry}
+\usepackage{xcolor}
+
+\definecolor{added}{RGB}{0,110,65}
+\definecolor{changed}{RGB}{25,70,155}
+\newcommand{\added}[1]{\textcolor{added}{#1}}
+\newcommand{\changed}[1]{\textcolor{changed}{#1}}
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+
+\begin{document}
+
+The original document is preserved below. The current HDF5 structure and
+its differences follow the original mindmap.
+
+% BEGIN ORIGINAL DOCUMENT BODY
+
+
+
+\section{ToDo - Next}
+\begin{itemize}
+    \item Mark: Github checken bzgl. Organisationseinheiten (OU) Account. Ziel Mitarbeiter haben Personalisierte Github accounts und können von unserer IT so lange sie contracted sind in unsere IBO Github Organisation eingehängt werden. Owner des REPO muss dan OU sein ??? To be discussed!
+    \item all2Jonas: Bereitstellung von functions welche in einem Package konsolidiert werden sollen und alle anderen Mitarbeitern über OU zur Verfügung gestellt werden soll. 
+    \item 
+\end{itemize}
+
+
+
+\section{Timeline}
+Laut Sitzung letzten Freitag wird das IBO noch für 2026 Matlab bezahlen, danach soll Weihnachten 2026 die Transition komplettiert sein. Ab Januar 2027 dann nahezu ausschliesslich Python/R, also Open Access Software im 'programming context'.\\
+Heisst für unsere Arbeitsgruppe: Timeline abstecken.
+
+\begin{itemize}
+    \item 2025-11: Auf mehreren Rechnern ist Python als Standard ausgerollt via Mark. Systeme und Python Package dependance file (oder wie das Ding nochmal heisst) wird auf feasability getested. 
+    \item 2026-01 Primäre Auswertung läuft über Python. Es sollen keine neuen Projekte mit Matlab begonnen werden.
+    \item  2026-01 Info an Dozierende des TEC dass ab Winter 2026-27 Python gelehrt werden muss.
+    \item 2027-01: Python läuft auf allen Maschinen mit Standardinstallation von Mark und 'alle' Projekte werden mit Python ausgewertet. Die Arbeitsgruppe stellt eine Grundauswertung zur Verfügung welche auf die unten stehende Architektur basiert (z.B. walking, running, vertical jumps)  
+\end{itemize}
+
+\section{Datei Architektur}
+\dirtree{%
+.1 /json-struct.
+.2 MetaData.\DTcomment{meta data}.
+.3 PathFile: str \DTcomment{file path + name}.
+.3 OriginalFiles: list[str]\DTcomment{list of all data source files}.
+.3 Project: str\DTcomment{project name}.
+.3 ProjectPI: str\DTcomment{project PI name}.
+.3 SubjectID: str\DTcomment{subject ID}.
+.3 Condition: str\DTcomment{condition name}.
+.3 BodyMass: float\DTcomment{subject body mass [kg]}.
+.3 BodyHeigt: float\DTcomment{subject body height [m]}.
+.3 Sex: str\DTcomment{subject sex ('m' or 'f')}.
+.3 Age: int.
+.3 FileCreationLocal: str\DTcomment{datetime of file creation local time ('YYYY-MM-DD, HH:MM:SS.sss')}.
+.3 FileCreationUTC: str\DTcomment{datetime of file creation UTC ('YYYY-MM-DD, HH:MM:SS.sss')}.
+.3 LastUpdate: str\DTcomment{datetime of latest file update ('YYYY-MM-DD, HH:MM:SS.sss')}.
+.3 Location: str\DTcomment{location of data collection}.
+.4 Lat: float.
+.4 Lon: float.
+.2 Trajectories.\DTcomment{marker data}.
+.3 SamplingFrequency: float\DTcomment{frame rate [Hz]}.
+.3 NumFrames: int\DTcomment{total number of frames}.
+.3 StartFrame: int\DTcomment{start frame of data if data was cropped}.
+.3 EndFrame: int\DTcomment{end frame of data if data was cropped}.
+.3 GlobalCoordinateSystem: str\DTcomment{description of each axis orientation}.
+.3 Labeled\DTcomment{all labeled trajectories}.
+.4 NumLabeled: int\DTcomment{number of labeled trajectories}.
+.4 Data: ndarray(NumLabeled, 4, NumFrames)\DTcomment{data of labeled trajectories [x,y,z + residuals]}.
+.4 Labels: list[str]\DTcomment{labels of trajectories [length = NumLabeled]}.
+.4 Type: ndarray(NumLabeled, NumFrames)\DTcomment{virtual or measured [1 = measured; 0 = virtual]}.
+.3 Unlabeled\DTcomment{all unlabeled trajectories}.
+.4 NumUnlabeled: int\DTcomment{number of labeled trajectories}.
+.4 Data: ndarray(NumUnLabeled, 4, NumFrames)\DTcomment{data of labeled trajectories [x,y,z + residuals]}.
+.4 Type: ndarray(NumUnLabeled, NumFrames)\DTcomment{virtual or measured [1 = measured; 0 = virtual]}.
+.2 Analog.
+.3 BoardName: str\DTcomment{A/D board name}.
+.3 SamplingFrequency: float\DTcomment{analog sampling frequency [Hz]}.
+.3 SamplingFactor: float\DTcomment{factor SamplingFrequency/FrameRate}.
+.3 NumSamples: int\DTcomment{total number of analog samples}.
+.3 Data: ndarray(NumChannels, NumSamples)\DTcomment{analog data}.
+.3 Labels: list[str]\DTcomment{analog channel names (length = NumChannels)}.
+.2 ForcePlates: list.
+.3 [0].
+.4 Name: str\DTcomment{forceplate name}.
+.4 NumSamples: int\DTcomment{total number of forceplate samples}.
+.4 SamplingFrequency: float\DTcomment{forceplate sampling frequency [Hz]}.
+.4 SamplingFactor: float\DTcomment{factor SamplingFrequency/FrameRate}.
+.4 Filter: str\DTcomment{detailed description of filter, if applied. else: none}.
+.4 COP: ndarray(3, NumSamples)\DTcomment{COP data}.
+.4 Force: ndarray(3, NumSamples)\DTcomment{force data}.
+.4 Moment: ndarray(3, NumSamples)\DTcomment{moment data}.
+.4 Location: ndarray(3, 4, NumFrames)\DTcomment{forceplate corners over time}.
+.4 Position: ndarray(4, NumFrames\DTcomment{forceplate origin + residuals}.
+.4 Rotation: ndarray(3, 3, NumFrames)\DTcomment{forceplate rotation matrix}.
+.4 Offset: ndarray(3,)\DTcomment{forceplate origin offset under corners}.
+.4 CoordinateSystem: int\DTcomment{is forceplate data saved in (1 = global; 0 = local) coordinates}.
+.3 [1].
+.4 (same fields as [0]).
+.2 RigidBodies.
+.3 [0].
+.4 Name: str\DTcomment{rigid body name}.
+.4 Parent: str\DTcomment{parent to which rigid body data is expressed to ('Global' or name)}.
+.4 TrajectoryNames: list[str]\DTcomment{list of trajectory labels that define rigid body}.
+.4 NumFrames: int\DTcomment{total number of frames}.
+.4 Filter: str\DTcomment{detailed description of filter, if applied. else: none}.
+.4 Position: ndarray(4, NumFrames)\DTcomment{force sensor origin + residuals}.
+.4 Rotation: ndarray(3, 3, NumFrames)\DTcomment{force sensor rotation matrix}.
+.4 RPYs: ndarray(3, NumFrames)\DTcomment{Roll, Ptich, Yaw}.
+.3 [1].
+.4 (same fields as [0]).
+.2 Events: list.
+.3 [0].
+.4 Name: str.
+.4 Frame: int.
+.4 Time: float.
+.3 [1].
+.4 (same fields as [0]).
+.2 CustomFields.
+}
+
+
+\section{Mindmap}
+\begin{itemize}
+    \item Converter (c3d -> .ibo-json; ...)
+    \item Importer (.ibo-json -> python)
+    \item crop/trim
+    \item filter
+    \item normalization
+    \item visualization
+    \item quality check
+    \item subject descriptive statistics
+    
+    
+\end{itemize}
+% END ORIGINAL DOCUMENT BODY
+
+\clearpage
+\section{Datei Architektur -- aktueller Stand}
+
+Current implementation: package 0.3.8, commit \code{a693f0e}, 15 October 2026.
+The layout below uses the same tree and field comments as the original.
+
+\added{Green entries were added.}
+\changed{Blue entries changed in name, location, shape or meaning.}
+Uncoloured entries retain the original concept.
+An \code{@} marks an HDF5 attribute; the other entries are groups or datasets.
+Numbered groups are shown as [0], [1], etc.
+Each signal group has its own NumSamples; NumFrames refers to marker frames.
+
+\dirtree{%
+.1 / \DTcomment{HDF5 file}.
+.2 \changed{MetaData}\DTcomment{nested metadata; no attributes here}.
+.3 \added{FileInfo}\DTcomment{file provenance}.
+.4 \changed{@PathFile: str}\DTcomment{source C3D path + filename}.
+.4 \changed{@OriginalFiles: list[str]}\DTcomment{source files; initially one C3D}.
+.4 \changed{@FileCreationLocal: str}\DTcomment{local creation datetime}.
+.4 \changed{@FileCreationUTC: str}\DTcomment{UTC creation datetime with offset}.
+.4 \changed{@LastUpdate: str}\DTcomment{latest data or metadata update}.
+.3 \added{Project}\DTcomment{project and subject information}.
+.4 \changed{@Project: str}\DTcomment{project name}.
+.4 \changed{@ProjectPI: str}\DTcomment{project PI name}.
+.4 \changed{@SubjectID: str}\DTcomment{subject ID}.
+.4 \changed{@Condition: str}\DTcomment{condition name}.
+.4 \changed{@BodyMass: float or str}\DTcomment{body mass [kg]; Unknown if absent}.
+.4 \changed{@BodyHeight: float or str}\DTcomment{body height [m]; corrected spelling}.
+.4 \changed{@Sex: str}\DTcomment{subject sex; Unknown if absent}.
+.4 \changed{@Age: int or str}\DTcomment{subject age; Unknown if absent}.
+.4 \added{@SubjectGroup: str}\DTcomment{subject group}.
+.3 \changed{Location}\DTcomment{subgroup rather than a string}.
+.4 \changed{@Lat: float or str}\DTcomment{latitude; initially Unknown}.
+.4 \changed{@Lon: float or str}\DTcomment{longitude; initially Unknown}.
+.3 \added{C3DParameters}\DTcomment{original source C3D parameters}.
+.4 \added{<family>}\DTcomment{e.g. POINT, ANALOG, EVENT}.
+.5 \added{\_\_METADATA\_\_}\DTcomment{family descriptors, if supplied}.
+.6 \added{@DESCRIPTION: str}\DTcomment{family description}.
+.6 \added{@IS\_LOCKED: bool}\DTcomment{family lock flag}.
+.5 \added{<parameter>}\DTcomment{e.g. RATE, LABELS, UNITS}.
+.6 \added{@type: int}\DTcomment{C3D parameter type code}.
+.6 \added{@description: str}\DTcomment{parameter description}.
+.6 \added{@is\_locked: bool}\DTcomment{parameter lock flag}.
+.6 \added{@value: any}\DTcomment{original value; source type and shape}.
+.6 \added{@<attribute>: any}\DTcomment{any additional source descriptor}.
+.2 Trajectories\DTcomment{marker data}.
+.3 @SamplingFrequency: float\DTcomment{marker frame rate [Hz], if known}.
+.3 @NumFrames: int\DTcomment{number of retained marker frames}.
+.3 \changed{@StartFrame: int}\DTcomment{first source point frame}.
+.3 \changed{@EndFrame: int}\DTcomment{last source point frame, inclusive}.
+.3 Labeled\DTcomment{all stored marker trajectories}.
+.4 @NumLabeled: int\DTcomment{number of stored markers}.
+.4 @Labels: list[str]\DTcomment{marker labels in data-row order}.
+.4 \added{@Unit: str}\DTcomment{position unit, usually mm or m}.
+.4 \added{@ResidualStatus: str}\DTcomment{NaN unavailable; negative invalid}.
+.4 \changed{Data: ndarray(NumLabeled, 4, NumFrames)}\DTcomment{[x,y,z,1]; fourth row now 1}.
+.4 \changed{Residuals: ndarray(NumLabeled, NumFrames)}\DTcomment{measurement residuals, stored separately}.
+.4 \changed{Virtual: ndarray(NumLabeled,)}\DTcomment{bool; True virtual, False measured}.
+.4 \added{Time: ndarray(NumFrames,)}\DTcomment{marker timestamps [s], if known}.
+.2 Analog\DTcomment{raw analog channels}.
+.3 @SamplingFrequency: float\DTcomment{analog sampling rate [Hz], if known}.
+.3 @NumSamples: int\DTcomment{number of retained analog samples}.
+.3 \added{@StartFrame: int}\DTcomment{first source analog sample}.
+.3 \added{@EndFrame: int}\DTcomment{last source analog sample, inclusive}.
+.3 @Labels: list[str]\DTcomment{channel labels in data-row order}.
+.3 \added{@Units: list[str]}\DTcomment{one physical unit per channel}.
+.3 \added{@Channels: list[int]}\DTcomment{zero-based source IDs; -1 unknown}.
+.3 Data: ndarray(NumChannels, NumSamples)\DTcomment{analog data}.
+.3 \added{Time: ndarray(NumSamples,)}\DTcomment{analog timestamps [s], if known}.
+.2 \changed{ForcePlates}\DTcomment{one numbered subgroup per plate}.
+.3 [0].
+.4 @Name: str\DTcomment{force plate name}.
+.4 @NumSamples: int\DTcomment{number of retained force samples}.
+.4 @SamplingFrequency: float\DTcomment{force sampling rate [Hz], if known}.
+.4 \added{@StartFrame: int}\DTcomment{first source analog sample}.
+.4 \added{@EndFrame: int}\DTcomment{last source analog sample, inclusive}.
+.4 \added{@FrameStep: int}\DTcomment{source stride; initially 1}.
+.4 @CoordinateSystem: int\DTcomment{1 global; 0 local}.
+.4 \added{@FreeMomentFrame: str}\DTcomment{global or local; matches vector frame}.
+.4 \added{@unit\_force: str}\DTcomment{force unit, e.g. N}.
+.4 \added{@unit\_moment: str}\DTcomment{moment/Tz unit, e.g. Nmm or Nm}.
+.4 \added{@unit\_position: str}\DTcomment{position unit, e.g. mm or m}.
+.4 Force: ndarray(3, NumSamples)\DTcomment{force components}.
+.4 Moment: ndarray(3, NumSamples)\DTcomment{moment components}.
+.4 COP: ndarray(3, NumSamples)\DTcomment{centre of pressure}.
+.4 \added{Tz: ndarray(3, NumSamples)}\DTcomment{full moment-at-CoP vector}.
+.4 \changed{Corners: ndarray(3, 4, NumSamples)}\DTcomment{plate corners; formerly Location}.
+.4 \changed{Origin: ndarray(3, 1)}\DTcomment{local origin offset; formerly Offset}.
+.4 \changed{Position: ndarray(3, NumSamples)}\DTcomment{plate-centre XYZ; no residual row}.
+.4 \changed{Rotation: ndarray(3, 3, NumSamples)}\DTcomment{rotation on force sample grid}.
+.4 \added{Time: ndarray(NumSamples,)}\DTcomment{force timestamps [s], if known}.
+.3 [1].
+.4 (same fields as [0]).
+.2 \changed{RigidBodies}\DTcomment{one numbered subgroup per body}.
+.3 [0].
+.4 @Name: str\DTcomment{rigid body name}.
+.4 \changed{@NumSamples: int}\DTcomment{body samples; formerly NumFrames}.
+.4 \added{@StartFrame: int}\DTcomment{first source pose sample}.
+.4 \added{@EndFrame: int}\DTcomment{last source pose sample, inclusive}.
+.4 \added{@Unit: str}\DTcomment{position unit, usually mm or m}.
+.4 \added{@SamplingFrequency: float}\DTcomment{body sampling rate [Hz], if known}.
+.4 \changed{Markers: list[str]}\DTcomment{UTF-8 dataset; formerly TrajectoryNames}.
+.4 \changed{Position: ndarray(3, NumSamples)}\DTcomment{global XYZ; no residual row}.
+.4 Rotation: ndarray(3, 3, NumSamples)\DTcomment{local-to-global orientation}.
+.4 \added{Time: ndarray(NumSamples,)}\DTcomment{body timestamps [s], if known}.
+.3 [1].
+.4 (same fields as [0]).
+.2 \changed{Events}\DTcomment{parallel datasets; one index per event}.
+.3 \changed{Name: list[str]}\DTcomment{event names; repeated names allowed}.
+.3 \changed{Frame: ndarray(NumEvents,)}\DTcomment{integer source point-frame numbers}.
+.3 \changed{Time: ndarray(NumEvents,)}\DTcomment{event timestamps [s]}.
+.3 \added{Description: list[str]}\DTcomment{event descriptions}.
+.3 \added{Context: list[str]}\DTcomment{e.g. Left or Right; default empty}.
+.3 \added{Subject: list[str]}\DTcomment{subject annotation; default empty}.
+.3 \added{IconID: ndarray(NumEvents,)}\DTcomment{integer icon IDs; default 0}.
+.3 \added{GenericFlag: ndarray(NumEvents,)}\DTcomment{integer generic flags; default 0}.
+.2 CustomFields\DTcomment{user-managed extension group}.
+.3 <path>: any\DTcomment{optional custom groups/datasets/attributes}.
+.2 \added{EMG}\DTcomment{selected EMG channels}.
+.3 \added{@SamplingFrequency: float}\DTcomment{EMG sampling rate [Hz], if known}.
+.3 \added{@NumSamples: int}\DTcomment{number of retained EMG samples}.
+.3 \added{@StartFrame: int}\DTcomment{first source analog sample}.
+.3 \added{@EndFrame: int}\DTcomment{last source analog sample, inclusive}.
+.3 \added{@Labels: list[str]}\DTcomment{EMG channel labels}.
+.3 \added{@Units: list[str]}\DTcomment{one physical unit per channel}.
+.3 \added{@Channels: list[int]}\DTcomment{zero-based source IDs; -1 unknown}.
+.3 \added{Data: ndarray(NumChannels, NumSamples)}\DTcomment{EMG container data}.
+.3 \added{Time: ndarray(NumSamples,)}\DTcomment{EMG timestamps [s], if known}.
+.2 \added{IKResults}\DTcomment{dedicated inverse-kinematics results}.
+.3 \added{@Labels: list[str]}\DTcomment{time first, then signal labels}.
+.3 \added{@NumSamples: int}\DTcomment{number of IK result samples}.
+.3 \added{@Metadata: str}\DTcomment{Python dictionary representation}.
+.3 \added{Data: ndarray(NumColumns+1, NumSamples)}\DTcomment{time row followed by signal rows}.
+.3 \added{Time: ndarray(NumSamples,)}\DTcomment{IK timestamps [s], if supplied}.
+.2 \added{IDResults}\DTcomment{dedicated inverse-dynamics results}.
+.3 \added{@Labels: list[str]}\DTcomment{time first, then signal labels}.
+.3 \added{@NumSamples: int}\DTcomment{number of ID result samples}.
+.3 \added{@Metadata: str}\DTcomment{Python dictionary representation}.
+.3 \added{Data: ndarray(NumColumns+1, NumSamples)}\DTcomment{time row followed by signal rows}.
+.3 \added{Time: ndarray(NumSamples,)}\DTcomment{ID timestamps [s], if supplied}.
+.2 \added{OpenSim}\DTcomment{arbitrary named OpenSim results}.
+.3 \added{<name>}\DTcomment{one MotResults block per name}.
+.4 \added{@Labels: list[str]}\DTcomment{time first, then unique signal labels}.
+.4 \added{@NumSamples: int}\DTcomment{number of samples in this result}.
+.4 \added{@Metadata: str}\DTcomment{Python dictionary representation}.
+.4 \added{@Unit: str}\DTcomment{overall unit; may be mixed or empty}.
+.4 \added{@ColumnUnits: list[str]}\DTcomment{per-signal units; excludes time}.
+.4 \added{Data: ndarray(NumColumns+1, NumSamples)}\DTcomment{time row followed by signal rows}.
+.4 \added{Time: ndarray(NumSamples,)}\DTcomment{required timestamps [s]; equals row 0}.
+}
+
+NumChannels and NumColumns belong to their containing group; NumColumns
+excludes time. Lists of event names/annotations and body marker names are
+UTF-8 string datasets. Metadata attributes may contain the string
+\code{Unknown} instead of a numeric value. Source C3D parameter names and
+shapes vary by recording; additional nested metadata can be supplied by users.
+
+Time datasets and sampling frequencies are omitted when unknown.
+C3D conversion creates MetaData, Trajectories, Analog, ForcePlates,
+RigidBodies, Events and CustomFields. A full processed save also creates
+EMG and OpenSim; dedicated IK/ID groups are added when results are supplied.
+
+\section{Unterschiede zur ursprünglichen Struktur}
+
+\begin{itemize}
+    \item \textbf{File format and metadata.}
+    The JSON proposal is implemented as HDF5 groups, attributes and datasets.
+    File provenance moved to \code{MetaData/FileInfo}; project and subject
+    attributes moved to \code{MetaData/Project}.
+    \code{BodyHeigt} became \code{BodyHeight}.
+    \code{SubjectGroup} and the original \code{C3DParameters} were added.
+    Location is a subgroup containing latitude/longitude attributes.
+    Timestamps use Python datetime strings; UTC creation includes its offset.
+
+    \item \textbf{Markers.}
+    The fourth Data component is now 1; residuals are a separate dataset.
+    Per-frame \code{Type} was replaced by one boolean \code{Virtual} per marker.
+    The separate Unlabeled branch and GlobalCoordinateSystem descriptor
+    are not implemented. Old Type and camera-mask datasets are removed on save.
+
+    \item \textbf{Analog and EMG.}
+    Per-channel units, source channel IDs, sample ranges and explicit clocks
+    were added. EMG is a separate collection with the same channel layout.
+    It stores the container's data; processed envelopes are not automatically
+    saved as another dataset. BoardName is not handled; SamplingFactor
+    is no longer written or read and is removed on channel/plate saves.
+
+    \item \textbf{Force plates.}
+    Location became Corners; Offset became Origin with shape (3,1).
+    Position now contains three coordinates without a residual row.
+    Geometry uses force samples rather than marker frames.
+    Tz is a three-component moment-at-CoP vector, with an explicit frame
+    and units. Unknown geometry uses NaN; finite rotations are validated.
+
+    \item \textbf{Source indices and clocks.}
+    EndFrame is inclusive. Markers/events use source point frames;
+    analog/EMG/forces use source analog sample indices.
+    Force FrameStep retains the source stride after downsampling:
+    \code{EndFrame = StartFrame + (NumSamples - 1) * FrameStep}.
+    Other streams use stride 1. Each collection/body/result keeps its own clock;
+    cropping markers does not automatically crop the other signals.
+
+    \item \textbf{Rigid bodies.}
+    TrajectoryNames became the Markers dataset; NumFrames became NumSamples.
+    Position contains global XYZ only. RPYs is not stored:
+    \code{RigidBody.RPY} computes roll/pitch/yaw in degrees from rotation.
+    Parent relationships and the original Filter descriptions are not stored.
+
+    \item \textbf{Events.}
+    Numbered event objects became parallel datasets. Description, Context,
+    Subject, IconID and GenericFlag were added. Names can repeat.
+    Readers require Name, Description, Frame and Time; the other four
+    annotations have defaults. Writers emit all eight fields.
+    Saving keeps events within the saved marker source-frame range,
+    including events skipped during loading; frames/times are not rebased.
+
+    \item \textbf{OpenSim results.}
+    IKResults and IDResults are new dedicated groups. OpenSim additionally
+    holds arbitrary named results with explicit per-column units.
+    Each result stores time in Data row 0 and separately in Time.
+    Metadata is a Python dictionary string, not JSON.
+    Dedicated IK units come from inDegrees; ID units come from metadata unit.
+    Named result blocks/columns are replaced on save. Dedicated IK/ID writers
+    retain old labels, write zero rows for removed columns, and keep an
+    existing group when the supplied result is None.
+
+    \item \textbf{Saving and extensions.}
+    Processed saves update an existing template atomically.
+    Selectively skipped signal collections are preserved, subject to the
+    event and old-marker-field handling above.
+    CustomFields contents survive the template copy but have no TrialData
+    mapping. Edits to trial.metadata require nested modify\_metadata updates;
+    save\_data only refreshes FileInfo/LastUpdate.
+    Source C3D parameters retain their acquisition values after processing.
+    There is no schema-version dispatch, automatic migration, SourceData
+    archive, JSON converter or automatic filter-history storage.
+\end{itemize}
+
+\end{document}
