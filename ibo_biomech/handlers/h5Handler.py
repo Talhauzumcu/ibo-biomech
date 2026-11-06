@@ -669,7 +669,14 @@ class H5Handler:
             count = int(trajectories.attrs.get('NumFrames', 0))
             if count > 0:
                 start = int(trajectories.attrs['StartFrame'])
-                events = [event for event in events if start <= event.frame < start + count]
+                valid_events = []
+                for event in events:
+                    if start <= event.frame < start + count:
+                        valid_events.append(event)
+                    else:
+                        print(f"[WARNING] Event {event.name} frame is out of range. Expected a value between"
+                              f" {start} - {start+count} got {event.frame}. Skipping event") 
+    
         if 'Events' in h5f:
             del h5f['Events']
         group = h5f.create_group('Events')
@@ -677,7 +684,7 @@ class H5Handler:
         for key, field, dtype in [('Name', 'name', string_type),('Frame', 'frame', int), ('Time', 'time', float),
                                   ('Description', 'description', string_type), ('Context', 'context', string_type), ('Subject', 'subject', string_type),
                                    ('IconID', 'icon_id', int), ('GenericFlag', 'generic_flag', int)]:
-            group.create_dataset(key, data=[getattr(event, field) for event in events], dtype=dtype)
+            group.create_dataset(key, data=[getattr(event, field) for event in valid_events], dtype=dtype)
 
     def _load_events(self, h5f: h5py.File) -> List[Event]:
         """Load required event fields and optional annotation datasets."""

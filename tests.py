@@ -7,7 +7,7 @@
 # #%%
 # c3dh = C3DHandler(str(folder / filename))
 # trial_c3d = c3dh.load_data()
-# # %%
+# # # %%
 # FileConverter.c3d_to_h5(str(folder / filename), 'test_output.h5')
 # #%%
 # FileConverter.h5_to_trc('test_output.h5', 'test_output.trc')
@@ -71,7 +71,7 @@
 #                         mass=70,
 #                         initial_time=0.5,
 #                         final_time=0.6)
-# # %%
+# %%
 # external_forces_file = build_extloads(r_idx=1, output_file='test_output/test_output_external_loads2.xml', h5_file=h5_file)
 
 # # %%
@@ -144,7 +144,7 @@ h5h = H5Handler('./example_data/test_h5_events.h5')
 trialdata = h5h.load_data()
 trialdata.attach_ID_results('./example_data/id.sto')
 trialdata.attach_IK_results('./example_data/ik.mot')
-trialdata.attach_opensim_results(name='body_kinematics_acc',filepath ='./example_data/body_kinematics.sto')
+# trialdata.attach_opensim_results(name='body_kinematics_acc',filepath ='./example_data/body_kinematics.sto')
 trialdata.parse_EMG_data([1,2,3])
 #%%
 rigid_body = RigidBody(name='test_body',markers=['marker1','marker2'],
@@ -155,9 +155,9 @@ rigid_body_2.rotate('z', 90)
 trialdata.add_rigid_body(rigid_body)
 trialdata.add_rigid_body(rigid_body_2)
 #%%
-event_time = trialdata.markers['Head1'].time_at_frame(1000)
-event1 = Event(name='test_event1', frame=1000, time=event_time, description='test event 1')
-trialdata.add_event(event1)
+# event_time = trialdata.markers['Head1'].time_at_frame(1000)
+# event1 = Event(name='test_event1', frame=1000, time=event_time, description='test event 1')
+# trialdata.add_event(event1)
 h5h.save_data(trialdata, 'test_h5_test2.h5')
 # %%
 h5h2 = H5Handler('test_h5_test2.h5')
@@ -186,3 +186,25 @@ trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].plot()
 trialdata.opensim_results['body_kinematics_acc'].crop(50,100)
 trialdata.opensim_results['body_kinematics_acc']['pelvis_Y'].plot()
 h5h.save_data(trialdata, 'pelvis_Y_filtered.h5')
+
+
+
+#%%
+from ibo_biomech import H5Handler, C3DHandler, RigidBody,FileConverter, Event
+import numpy as np
+h5h = H5Handler('./example_data/test_h5_events.h5')
+trialdata = h5h.load_data()
+#%%
+index = 100
+time = trialdata.markers['STRN'].time[index] 
+event = Event(name = 'test_event1', frame = index, time=time )
+trialdata.add_event(event)
+#%%
+
+index = 85
+time = trialdata.markers['STRN'].time[index] 
+event = Event(name = 'test_event2', frame = index, time=time )
+trialdata.add_event(event)
+#%%
+h5h.save_data(trialdata,'marvin_test.h5')
+# %%
