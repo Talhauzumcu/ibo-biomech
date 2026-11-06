@@ -575,9 +575,17 @@ class H5Handler:
         return IDResults(name=self.trial_name, time=time, data=data_dict, metadata=metadata, unit=unit)
 
     def _load_forces(self, h5f: h5py.File) -> Dict[str, ForceData]:
+        """Load force plates in saved order (numeric group keys, not h5py's text order)."""
+        group = h5f.get('ForcePlates')
+        if group is None:
+            return {}
+
+        def order(key: str):
+            return (0, int(key)) if key.isdigit() else (1, key)
+
         plates = {}
-        for group in h5f.get('ForcePlates', {}).values():
-            plate = read_plate(group)
+        for key in sorted(group.keys(), key=order):
+            plate = read_plate(group[key])
             if plate.name in plates:
                 raise ValueError(f'Duplicate force plate name: {plate.name}')
             plates[plate.name] = plate

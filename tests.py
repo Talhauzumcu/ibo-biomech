@@ -208,3 +208,14 @@ trialdata.add_event(event)
 #%%
 h5h.save_data(trialdata,'marvin_test.h5')
 # %%
+from ibo_biomech import C3DHandler
+c3dhandler = C3DHandler('T_CLSOSCL1_000_240607_abriss_1_corr.c3d')
+trialdata = c3dhandler.load_data()
+#%%
+
+from ibo_biomech import FileConverter
+FileConverter.c3d_to_h5('T_CLSOSCL1_000_240607_abriss_1_corr.c3d','T_CLSOSCL1_000_240607_abriss_1_corr.h5')
+# %%
+from ibo_biomech import H5Handler
+h5handler = H5Handler('T_CLSOSCL1_000_240607_abriss_1_corr.h5')
+trialdata2 = h5handler.load_data()
