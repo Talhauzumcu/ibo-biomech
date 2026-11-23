@@ -7,6 +7,7 @@ from ibo_biomech.containers import AnalogData, ForceData, MarkerData, TrialData,
 import numpy as np
 from copy import deepcopy
 from .h5Handler import H5Handler
+from ._force_platforms import extract_platforms
 from ibo_biomech.containers._validation import collection_clock, frame_at_time
 from ibo_biomech.utils.utils import *
 
@@ -16,7 +17,9 @@ class C3DHandler:
     Wraps the :mod:`ezc3d` reader. After :meth:`load_data`, parsed channels are
     available as the :attr:`markers`, :attr:`analogs` and :attr:`forces`
     dictionaries and :attr:`events` list shared with the returned TrialData. The raw source structure
-    remains separate and is written only by :meth:`write_raw_c3d`.
+    remains separate and is written only by :meth:`write_raw_c3d`. Force-platform types 1-4 are
+    computed by ezc3d; type 5 (eight channels with a 6x8 calibration matrix), which ezc3d does
+    not support, is computed by this package with the same conventions.
 
     Attributes:
         filepath: Path to the source C3D file.
@@ -61,7 +64,10 @@ class C3DHandler:
             raise FileNotFoundError(f"C3D file not found: {self.filepath}")
         
         try:
-            self.c3d_data = c3d(os.fspath(self.filepath), extract_forceplat_data=True)
+            self.c3d_data = c3d(os.fspath(self.filepath))
+            # ezc3d's own extraction raises for type-5 plates and aborts the whole
+            # read, so platforms are extracted per plate (type 5 in Python).
+            self.c3d_data['data']['platform'] = extract_platforms(self.c3d_data)
             self._parse_markers()
             self._parse_analogs()
             self._parse_force_plates()     
